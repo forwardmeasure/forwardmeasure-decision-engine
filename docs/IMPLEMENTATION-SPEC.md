@@ -1204,10 +1204,9 @@ it out — flagging in case this was wrong` comment instead.
    ecosystem (no mTLS, no per-caller auth token, reachable only via ClusterIP). If that trust model
    is wrong for this project specifically, that is a decision to surface explicitly, not to route
    around by quietly adding a custom auth layer.
-9. **No publishing this chart through the shared `helm-charts` repository, no registering a release
-   in `forwardmeasure-platform/deploy`'s helmfile**, for this initial build (Section 9). Both are
-   legitimate future integrations if this project graduates from standalone evaluation to adopted
-   platform component, but building them now is scope this spec does not ask for.
+9. The chart is published through the shared `helm-charts` publication workflow and consumed by
+   platform deployments as a versioned chart artifact. The product Helmfile may use the sibling
+   chart source checkout for local development (Section 9).
 10. **No Infinispan, no other distributed cache/data-grid technology for the fact window.**
     Considered and rejected during this spec's own design process: Infinispan's embedded mode
     couples cache scaling to application-pod scaling (the exact coupling problem the fact window
