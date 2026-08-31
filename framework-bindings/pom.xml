@@ -32,17 +32,10 @@
     <packaging>pom</packaging>
 
     <name>Decision Engine :: Framework Bindings</name>
-    <description>Quarkus, Spring, and Micronaut bindings at parity - each wires only its own framework's own gRPC extension (quarkus-grpc / spring-boot-grpc-server / micronaut-grpc) for transport registration, plus JPA/Postgres for decision-engine-jpa. No Drools-specific framework integration anywhere in these three modules - see IMPLEMENTATION-SPEC.md Section 13 item 1.</description>
+    <description>Reusable Quarkus, Spring, and Micronaut integrations only. Executable entry points, runtime assembly, Dockerfiles, and container images live in decision-engine-deployments, matching the OpenWorkflow framework-bindings/openworkflow-deployments convention.</description>
 
     <dependencyManagement>
         <dependencies>
-            <!-- Quarkus currently brings Netty 4.1. Lettuce 6.5 is the compatible driver line;
-                 Lettuce 7.x requires the Netty 4.2 API and fails at runtime in these images. -->
-            <dependency>
-                <groupId>io.lettuce</groupId>
-                <artifactId>lettuce-core</artifactId>
-                <version>6.5.5.RELEASE</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 

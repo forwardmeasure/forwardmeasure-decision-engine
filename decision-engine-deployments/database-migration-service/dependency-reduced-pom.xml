@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.forwardmeasure.decisionengine</groupId>
+  <artifactId>decision-engine-database-migration-service</artifactId>
+  <name>Decision Engine :: Database Migration Service</name>
+  <version>1.0.0-SNAPSHOT</version>
+  <description>Bounded Kubernetes migration-job entry point (RulesetMigrationsMain) - a direct port of forwardmeasure-agent-os's own AgentOsMigrationsMain. Reads DECISION_ENGINE_DATABASE_URL/_USERNAME/_PASSWORD (administrator credential here; the SAME env var names mean the runtime credential in the running server - see IMPLEMENTATION-SPEC.md Section 7.3) plus DECISION_ENGINE_RUNTIME_DATABASE_USERNAME/_PASSWORD for the role this job provisions.</description>
+  <url>https://github.com/forwardmeasure/forwardmeasure-decision-engine/decision-engine-deployments/decision-engine-database-migration-service</url>
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <scm>
+    <connection>scm:git:https://github.com/forwardmeasure/forwardmeasure-decision-engine.git/decision-engine-deployments/decision-engine-database-migration-service</connection>
+    <developerConnection>scm:git:git@github.com:forwardmeasure/forwardmeasure-decision-engine.git/decision-engine-deployments/decision-engine-database-migration-service</developerConnection>
+    <url>https://github.com/forwardmeasure/forwardmeasure-decision-engine/decision-engine-deployments/decision-engine-database-migration-service</url>
+  </scm>
+  <repositories>
+    <repository>
+      <releases />
+      <snapshots />
+      <id>github</id>
+      <name>ForwardMeasure GitHub Packages</name>
+      <url>https://maven.pkg.github.com/forwardmeasure/*</url>
+    </repository>
+  </repositories>
+</project>

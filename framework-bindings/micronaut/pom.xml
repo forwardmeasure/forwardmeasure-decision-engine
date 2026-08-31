@@ -1,191 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Licensed to the Apache Software Foundation (ASF) under one or more
-  contributor license agreements. See the NOTICE file distributed with
-  this work for additional information regarding copyright ownership.
-  The ASF licenses this file to You under the Apache License, Version 2.0
-  (the "License"); you may not use this file except in compliance with
-  the License. You may obtain a copy of the License at
-
-      https://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
+  Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+  agreements. See the NOTICE file distributed with this work for additional information
+  regarding copyright ownership. The ASF licenses this file to You under the Apache License,
+  Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at https://www.apache.org/licenses/LICENSE-2.0
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
-    <parent>
-        <groupId>com.forwardmeasure.decisionengine</groupId>
-        <artifactId>decision-engine-framework-bindings</artifactId>
-        <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
-    </parent>
-
-    <groupId>com.forwardmeasure.decisionengine</groupId>
-    <artifactId>decision-engine-micronaut</artifactId>
-    <packaging>jar</packaging>
-
-    <name>Decision Engine :: Micronaut</name>
-    <description>Micronaut gRPC + persistence wiring only - IMPLEMENTATION-SPEC.md Section 8.4. The shared EvaluationServiceImpl/ManagementServiceImpl from decision-engine-grpc need a thin annotated subclass here for Micronaut's compile-time DI to discover them - same pattern as MicronautPolicyEvaluationsResource extends PolicyEvaluationsResource in forwardmeasure-agent-os. MicronautTransactionalServiceProxy-style wrapping applies to the JPA-backed RulesetVersionService only, never to ValkeyFactWindowStore (no transactional concerns there).</description>
-
-    <properties>
-        <container-image.name>decision-engine-micronaut</container-image.name>
-    </properties>
-
-    <dependencyManagement>
-        <dependencies>
-        <dependency>
-            <groupId>com.forwardmeasure.platform</groupId>
-            <artifactId>forwardmeasure-platform-micronaut-bom</artifactId>
-            <version>${forwardmeasure.platform.version}</version>
-            <type>pom</type>
-            <scope>import</scope>
-        </dependency>
-        </dependencies>
-    </dependencyManagement>
-
+    <parent><groupId>com.forwardmeasure.decisionengine</groupId><artifactId>decision-engine-framework-bindings</artifactId><version>${revision}</version><relativePath>../pom.xml</relativePath></parent>
+    <artifactId>decision-engine-micronaut-binding</artifactId><packaging>jar</packaging>
+    <name>Decision Engine :: Micronaut Binding</name>
+    <description>Reusable Micronaut integration. Executable assembly and container image configuration live in decision-engine-deployments/micronaut.</description>
+    <dependencyManagement><dependencies><dependency><groupId>com.forwardmeasure.platform</groupId><artifactId>forwardmeasure-platform-micronaut-bom</artifactId><version>${forwardmeasure.platform.version}</version><type>pom</type><scope>import</scope></dependency></dependencies></dependencyManagement>
     <dependencies>
-        <dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>decision-engine-grpc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>decision-engine-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>decision-engine-jpa</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.forwardmeasure.jpa</groupId>
-            <artifactId>forwardmeasure-jpa-micronaut</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>decision-engine-fact-window</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.micronaut</groupId>
-            <artifactId>micronaut-context</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.micronaut.grpc</groupId>
-            <artifactId>micronaut-grpc-server-runtime</artifactId>
-            <!-- Verify exact current artifact coordinates against micronaut-projects/micronaut-grpc
-                 before relying on this - IMPLEMENTATION-SPEC.md Section 3. -->
-        </dependency>
-        <dependency>
-            <groupId>io.micronaut.sql</groupId>
-            <artifactId>micronaut-jdbc-hikari</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.micronaut</groupId>
-            <artifactId>micronaut-inject-java</artifactId>
-            <scope>provided</scope>
-        </dependency>
+        <dependency><groupId>${project.groupId}</groupId><artifactId>decision-engine-grpc</artifactId></dependency>
+        <dependency><groupId>${project.groupId}</groupId><artifactId>decision-engine-core</artifactId></dependency>
+        <dependency><groupId>${project.groupId}</groupId><artifactId>decision-engine-jpa</artifactId></dependency>
+        <dependency><groupId>com.forwardmeasure.jpa</groupId><artifactId>forwardmeasure-jpa-micronaut</artifactId></dependency>
+        <dependency><groupId>${project.groupId}</groupId><artifactId>decision-engine-fact-window</artifactId></dependency>
+        <dependency><groupId>io.micronaut</groupId><artifactId>micronaut-context</artifactId></dependency>
+        <dependency><groupId>io.micronaut.grpc</groupId><artifactId>micronaut-grpc-server-runtime</artifactId></dependency>
+        <dependency><groupId>io.micronaut.sql</groupId><artifactId>micronaut-jdbc-hikari</artifactId></dependency>
+        <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
+        <dependency><groupId>io.micronaut</groupId><artifactId>micronaut-inject-java</artifactId><scope>provided</scope></dependency>
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <annotationProcessorPaths combine.children="append">
-                        <path>
-                            <groupId>io.micronaut</groupId>
-                            <artifactId>micronaut-inject-java</artifactId>
-                        </path>
-                    </annotationProcessorPaths>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>copy-dependencies</id>
-                        <phase>prepare-package</phase>
-                        <goals><goal>copy-dependencies</goal></goals>
-                        <configuration>
-                            <outputDirectory>${project.build.directory}/dependency</outputDirectory>
-                            <includeScope>runtime</includeScope>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <configuration>
-                    <archive>
-                        <manifest>
-                            <mainClass>com.forwardmeasure.decisionengine.micronaut.DecisionEngineMicronautApplication</mainClass>
-                            <addClasspath>true</addClasspath>
-                            <classpathPrefix>dependency/</classpathPrefix>
-                        </manifest>
-                    </archive>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
-
-    <profiles>
-        <profile>
-            <id>container-image</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>io.fabric8</groupId>
-                        <artifactId>docker-maven-plugin</artifactId>
-                        <configuration>
-                            <images>
-                                <image>
-                                    <name>${container-image.registry}/${container-image.group}/${container-image.name}:${container-image.tag}</name>
-                                    <build>
-                                        <contextDir>${project.basedir}</contextDir>
-                                        <dockerFile>src/main/docker/Dockerfile.jvm</dockerFile>
-                                        <args>
-                                            <APPLICATION_JAR>target/${project.build.finalName}.jar</APPLICATION_JAR>
-                                            <DEPENDENCY_DIR>target/dependency</DEPENDENCY_DIR>
-                                            <BASE_IMAGE>${container-image.base-jre}</BASE_IMAGE>
-                                        </args>
-                                    </build>
-                                </image>
-                            </images>
-                        </configuration>
-                        <executions>
-                            <execution>
-                                <id>build-container-image</id>
-                                <phase>package</phase>
-                                <goals><goal>build</goal></goals>
-                            </execution>
-                            <execution>
-                                <id>push-container-image</id>
-                                <phase>package</phase>
-                                <goals><goal>push</goal></goals>
-                            </execution>
-                        </executions>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
+    <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><configuration><annotationProcessorPaths combine.children="append"><path><groupId>io.micronaut</groupId><artifactId>micronaut-inject-java</artifactId></path></annotationProcessorPaths></configuration></plugin></plugins></build>
 </project>

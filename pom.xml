@@ -95,8 +95,8 @@
         <module>decision-engine-fact-window</module>
         <module>decision-engine-grpc</module>
         <module>decision-engine-database-migrations</module>
-        <module>decision-engine-database-migration-service</module>
         <module>framework-bindings</module>
+        <module>decision-engine-deployments</module>
         <module>decision-engine-architecture-tests</module>
         <module>decision-engine-conformance-tests</module>
     </modules>
@@ -211,12 +211,27 @@
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-quarkus-binding</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
             <artifactId>decision-engine-spring</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-spring-binding</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
             <artifactId>decision-engine-micronaut</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-micronaut-binding</artifactId>
             <version>${project.version}</version>
         </dependency>
         </dependencies>

@@ -22,7 +22,7 @@
 
     <parent>
         <groupId>com.forwardmeasure.decisionengine</groupId>
-        <artifactId>forwardmeasure-decision-engine-parent</artifactId>
+        <artifactId>decision-engine-deployments</artifactId>
         <version>${revision}</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
@@ -42,6 +42,7 @@
     </dependencies>
 
     <build>
+        <finalName>decision-engine-database-migration-service</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

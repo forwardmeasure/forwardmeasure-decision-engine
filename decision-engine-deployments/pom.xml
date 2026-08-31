@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+  agreements. See the NOTICE file distributed with this work for additional information
+  regarding copyright ownership. The ASF licenses this file to You under the Apache License,
+  Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at https://www.apache.org/licenses/LICENSE-2.0
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.forwardmeasure.decisionengine</groupId>
+        <artifactId>forwardmeasure-decision-engine-parent</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <artifactId>decision-engine-deployments</artifactId>
+    <packaging>pom</packaging>
+    <name>Decision Engine :: Deployments</name>
+    <description>Executable decision-engine services and migration jobs. Framework integration remains in decision-engine-framework-bindings; these modules own application assembly, entry points, Dockerfiles, and container images.</description>
+    <modules>
+        <module>quarkus</module>
+        <module>spring</module>
+        <module>micronaut</module>
+        <module>database-migration-service</module>
+    </modules>
+</project>

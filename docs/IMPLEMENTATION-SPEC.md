@@ -77,15 +77,19 @@ forwardmeasure-decision-engine/
 ├── decision-engine-database-migrations/       (Liquibase changelog + schema migrator for ruleset
 │                                                DEFINITIONS only - mirrors the pattern in
 │                                                Section 7.3)
-├── decision-engine-database-migration-service/ (bounded Job entry point, mirrors Section 7.3)
-├── framework-bindings/
+├── framework-bindings/                         (reusable framework integration only)
 │   ├── quarkus/
 │   ├── spring/
 │   └── micronaut/
+├── decision-engine-deployments/                (executable services, images, migration Job)
+│   ├── quarkus/
+│   ├── spring/
+│   ├── micronaut/
+│   └── database-migration-service/
 ├── decision-engine-architecture-tests/         (ArchUnit: core/domain must never depend on any
 │                                                framework package - see Section 11.4)
 ├── decision-engine-conformance-tests/          (black-box gRPC client tests run against each of the
-│                                                three framework bindings in turn - see Section 11.3)
+│                                                three deployment images in turn - see Section 11.3)
 └── deploy/                                     (this project's Helmfile and deployment manifests;
     └── helmfile/
         ├── helmfile.yaml.gotmpl
@@ -919,7 +923,8 @@ the hard way in production; this is exactly the kind of validation Section 7.3's
 guidance should also warn about.
 
 **This module has no `@GrpcService`, no Spring `@Bean`, no Micronaut `@Singleton` anywhere in it.**
-Those annotations belong exclusively in the three `framework-bindings/*` modules below.
+Those annotations belong exclusively in the three `framework-bindings/*` modules below; the
+executable entry points and image assembly belong in `decision-engine-deployments/*`.
 
 ### 8.2 Quarkus binding
 
@@ -1081,9 +1086,12 @@ concern, invisible to the application code.
 
 ### 9.3 Container images
 
-`io.fabric8:docker-maven-plugin`, `container-image` Maven profile, one image per framework binding
-(`decision-engine-quarkus`, `decision-engine-spring`, `decision-engine-micronaut`) — same
-`Dockerfile.jvm` shapes already proven for each framework in `forwardmeasure-agent-os`.
+`io.fabric8:docker-maven-plugin`, `container-image` Maven profile, one image per deployment variant
+(`decision-engine-quarkus`, `decision-engine-spring`, `decision-engine-micronaut`) plus the
+database-migration-service Job image — same `Dockerfile.jvm` shapes already proven for each
+framework in `forwardmeasure-agent-os`. The Maven modules under `decision-engine-deployments` own
+the executable entry points, runtime assembly, Dockerfiles, and image builds; the modules under
+`framework-bindings` are reusable framework integration libraries only.
 
 ---
 
@@ -1146,7 +1154,7 @@ done when:
 
 1. `decision-engine-architecture-tests` passes — the core/domain-framework-neutrality rule is real,
    not aspirational.
-2. Every one of the three framework bindings has been built into a real container image and
+2. Every one of the three deployment variants has been built into a real container image and
    actually run as a container against a real Postgres **and** a real Valkey (Section 11.3) — not
    just compiled.
 3. The fail-closed behavior (Sections 7.2, 7.4) has passing tests that would fail if someone "fixed"
