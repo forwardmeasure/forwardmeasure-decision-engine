@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Self-contained - this repository's own deployment does not depend on forwardmeasure-platform/
-# deploy or the shared helm-charts repository (IMPLEMENTATION-SPEC.md Section 9). Both remain
-# possible additive integrations later; this file must work with nothing beyond this repository.
+# This product Helmfile consumes the canonical chart source from the sibling helm-charts checkout
+# during local development. Published platform deployments consume the versioned chart artifact
+# from the ForwardMeasure chart repository.
 #
 # One release group, inlined directly here rather than split into a separate helmfiles/*.yaml.gotmpl
 # dispatched from this file - forwardmeasure-platform/deploy's own multi-stage split (00-foundation,
@@ -60,7 +60,8 @@ releases:
 
   - name: decision-engine
     namespace: {{ .Values.namespaces.decisionEngine }}
-    chart: ../helm/decision-engine
+    # Local workspace path; forwardmeasure-platform uses the published chart artifact instead.
+    chart: ../../../helm-charts/charts/decision-engine-helm-chart/helm-chart-sources
     version: {{ .Values.chartVersions.decisionEngine | quote }}
     labels: {component: server}
     needs:

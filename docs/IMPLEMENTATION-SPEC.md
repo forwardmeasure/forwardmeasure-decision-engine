@@ -86,12 +86,7 @@ forwardmeasure-decision-engine/
 │                                                framework package - see Section 11.4)
 ├── decision-engine-conformance-tests/          (black-box gRPC client tests run against each of the
 │                                                three framework bindings in turn - see Section 11.3)
-└── deploy/                                     (this project's OWN, self-contained deployment -
-    ├── helm/                                    Section 9. Not published through the shared
-    │   └── decision-engine/                      helm-charts repo, not dependent on
-    │       ├── Chart.yaml                         forwardmeasure-platform/deploy)
-    │       ├── values.yaml
-    │       └── templates/
+└── deploy/                                     (this project's Helmfile and deployment manifests;
     └── helmfile/
         ├── helmfile.yaml.gotmpl
         ├── environments/
@@ -985,23 +980,27 @@ Those annotations belong exclusively in the three `framework-bindings/*` modules
 
 ---
 
-## 9. Deployment — self-contained, inside this repository
+## 9. Deployment — product Helmfile plus published chart
 
-This project deploys itself. It does not publish a chart through the shared `helm-charts`
-repository and does not register a release in `forwardmeasure-platform/deploy`'s helmfile. Both
-remain possible *additive* integrations later if desired, but this repository must be fully
-installable on its own with nothing beyond what lives in `deploy/`.
+The canonical `decision-engine` chart is maintained and published through the sibling
+`helm-charts` repository. This repository owns the product Helmfile and environment-specific
+orchestration values; `forwardmeasure-platform` registers the published chart as part of the full
+platform deployment. For local development, this repository's Helmfile consumes the sibling chart
+source checkout directly.
 
-### 9.1 `deploy/helm/decision-engine` — the chart
+### 9.1 Published `decision-engine` Helm chart
+
+The canonical chart source lives in the sibling `helm-charts` repository at
+`charts/decision-engine-helm-chart/helm-chart-sources`. It is packaged and published there. A
+local checkout of this repository may use the sibling chart source through the product Helmfile;
+the platform deployment consumes the published, versioned chart artifact.
 
 One chart, parameterized by framework choice (`image.repository` picks which of the three built
 images to run — this project does not need three separate charts, only three container images; the
 chart's shape — Deployment, Service, ServiceAccount, gRPC health probe, resource limits — is
 identical regardless of which framework built the image inside it). Mirror the
 `opa-helm-chart`'s own structure and conventions from the parallel investigation (`Chart.yaml`,
-`_helpers.tpl`, `values.yaml`, `templates/`) as the direct template — same house style, same
-`helm-chart-sources`-free flat layout is fine here since this chart is never published externally
-through `helm-charts`' own tooling.
+`_helpers.tpl`, `values.yaml`, `templates/`) as the direct template.
 
 **This chart's own `values.yaml` has no `embedded`/`external` concept at all, by design** — it
 carries only a plain, already-resolved `factWindow.valkey.{host,port,credentialsSecret}`:
@@ -1059,7 +1058,8 @@ releases:
 
   - name: decision-engine
     namespace: {{ .Values.namespaces.decisionEngine }}
-    chart: ../helm/decision-engine
+    # Local workspace path to the canonical chart in the sibling helm-charts repository.
+    chart: ../../../helm-charts/charts/decision-engine-helm-chart/helm-chart-sources
     version: {{ .Values.chartVersions.decisionEngine | quote }}
     labels: {component: server}
     needs:
@@ -1156,7 +1156,8 @@ done when:
    11.3), proving a rule that only fires on a session's *third* call actually fires on the third
    call and not the first or second — this is the one piece of evidence that actually justifies this
    project's existence alongside OPA. Nothing else in this list substitutes for it.
-5. `deploy/helm/decision-engine` passes `helm lint --strict`, and `helmfile template` against
+5. The published `decision-engine` chart passes `helm lint --strict`, and the product Helmfile
+   template against
    `deploy/helmfile/` renders correctly for **both** `factWindow.valkey.mode: embedded` and
    `mode: external` (Section 9.2) — both toggle states, not just the default.
 
