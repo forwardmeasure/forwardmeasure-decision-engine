@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements. See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License. You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.forwardmeasure.decisionengine</groupId>
+        <artifactId>forwardmeasure-decision-engine-parent</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <groupId>com.forwardmeasure.decisionengine</groupId>
+    <artifactId>decision-engine-api-specifications</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Decision Engine :: API Specifications</name>
+    <description>
+        Canonical, SINGLE-COPY interface-definition sources for this service, one directory per
+        wire protocol under META-INF - mirrors agent-os-api-specifications' own META-INF/openapi
+        convention in forwardmeasure-agent-os exactly (a plain resources jar, unpacked by each
+        language-binding module rather than the source files being copied into them - see
+        decision-engine-api-language-bindings' own module Javadoc for why that distinction matters).
+
+        Currently: META-INF/proto/forwardmeasure/decisionengine/v1/{evaluation,ruleset_management}.proto
+        (gRPC/Protocol Buffers).
+
+        Deliberately structured to add a Thrift interface later as a sibling, e.g.
+        META-INF/thrift/forwardmeasure/decisionengine/v1/*.thrift, without restructuring this
+        module or anything that depends on it - do not flatten "proto" out of the resource path
+        into something protocol-agnostic; the whole point is that multiple protocol directories can
+        coexist here side by side once there is a second one.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

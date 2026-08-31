@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package forwardmeasure.decisionengine.v1;
+
+option java_package = "com.forwardmeasure.decisionengine.contract.v1";
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+
+// See IMPLEMENTATION-SPEC.md Section 6.2 for the full design rationale, and its "Validation
+// rules, non-negotiable" note - do not weaken any of the three rules listed there.
+service RulesetManagementService {
+  rpc CreateRulesetVersion(CreateRulesetVersionRequest) returns (RulesetVersion);
+  rpc GetActiveRulesetVersion(GetActiveRulesetVersionRequest) returns (RulesetVersion);
+  rpc ListRulesetVersions(ListRulesetVersionsRequest) returns (ListRulesetVersionsResponse);
+  rpc ActivateRulesetVersion(ActivateRulesetVersionRequest) returns (RulesetVersion);
+  rpc DeleteRulesetVersion(DeleteRulesetVersionRequest) returns (DeleteRulesetVersionResponse);
+}
+
+enum RulesetMode {
+  RULESET_MODE_UNSPECIFIED = 0;
+  STATELESS = 1;
+  STATEFUL = 2;
+}
+
+message RulesetVersion {
+  string ruleset = 1;
+  int64 version = 2;
+  string drl = 3;
+  bool active = 4;
+  RulesetMode mode = 5;
+  // Per-ruleset fact-window bounds (Section 7.4). Meaningful only when mode == STATEFUL; ignored
+  // otherwise. Both are required (no implicit default) when creating a STATEFUL version.
+  int32 max_window_size = 6;
+  int32 idle_timeout_seconds = 7;
+  google.protobuf.Timestamp created_at = 8;
+  string created_by = 9;
+}
+
+message CreateRulesetVersionRequest {
+  string ruleset = 1;
+  string drl = 2;
+  RulesetMode mode = 3;
+  int32 max_window_size = 4;
+  int32 idle_timeout_seconds = 5;
+  string created_by = 6;
+  // Default false for subsequent versions. The service rejects an inactive first version so a
+  // ruleset never starts without an active decision definition.
+  bool activate = 7;
+}
+
+message GetActiveRulesetVersionRequest {
+  string ruleset = 1;
+}
+
+message ListRulesetVersionsRequest {
+  string ruleset = 1;
+  string cursor = 2;
+  int32 limit = 3;
+}
+
+message ListRulesetVersionsResponse {
+  repeated RulesetVersion items = 1;
+  string next_cursor = 2;
+}
+
+message ActivateRulesetVersionRequest {
+  string ruleset = 1;
+  int64 version = 2;
+}
+
+message DeleteRulesetVersionRequest {
+  string ruleset = 1;
+  int64 version = 2;
+}
+
+message DeleteRulesetVersionResponse {
+  bool deleted = 1;
+}

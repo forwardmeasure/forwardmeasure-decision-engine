@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package forwardmeasure.decisionengine.v1;
+
+option java_package = "com.forwardmeasure.decisionengine.contract.v1";
+option java_multiple_files = true;
+
+import "google/protobuf/struct.proto";
+
+// See IMPLEMENTATION-SPEC.md Section 6.1 for the full design rationale behind every field below -
+// do not change a field's meaning without updating that section too.
+service EvaluationService {
+  rpc Evaluate(EvaluationRequest) returns (EvaluationResponse);
+}
+
+message EvaluationRequest {
+  // Namespaced ruleset identifier, e.g. "agentos/execution/actionGate". Validated server-side
+  // against ^[a-z][a-zA-Z0-9]*(/[a-z][a-zA-Z0-9]*)*$
+  string ruleset = 1;
+
+  // Arbitrary structured input, converted to a generic fact for rule matching (Section 7.2). No
+  // per-ruleset Java type exists on purpose - a new ruleset never requires a Java code change.
+  google.protobuf.Struct input = 2;
+
+  // Optional. Absent = active version. Present = pin evaluation to that exact version.
+  optional int64 ruleset_version = 3;
+
+  // REQUIRED for STATEFUL rulesets (Section 7.4), ignored for STATELESS ones. Partitions the fact
+  // window - e.g. an agent execution ID if the caller is forwardmeasure-agent-os. Opaque to this
+  // service. Calling a STATEFUL ruleset without one is INVALID_ARGUMENT, never a silent fallback.
+  string session_key = 4;
+
+  string correlation_id = 5;
+}
+
+message EvaluationResponse {
+  // The ruleset's own `result` global, serialized back verbatim. Never schema-constrained beyond
+  // the fail-closed requirement that "outcome" is present and non-null (Section 7.2).
+  google.protobuf.Struct result = 1;
+
+  // Observability: every rule that fired, in firing order. Never omit this.
+  repeated string fired_rules = 2;
+
+  int64 ruleset_version = 3;
+
+  // How many facts were in working memory when rules fired - 1 for stateless (or a stateful
+  // ruleset's first call for a session_key), growing as the fact window accumulates.
+  int32 facts_considered = 4;
+
+  string correlation_id = 5;
+}

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements. See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License. You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.forwardmeasure.decisionengine</groupId>
+        <artifactId>forwardmeasure-decision-engine-parent</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <groupId>com.forwardmeasure.decisionengine</groupId>
+    <artifactId>decision-engine-fact-window</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Decision Engine :: Fact Window</name>
+    <description>ValkeyFactWindowStore: the fact-HISTORY store for STATEFUL rulesets - see IMPLEMENTATION-SPEC.md Section 7.4 for the full design rationale (why Valkey, not Postgres; why not a long-lived in-process KieSession; the fail-closed rule for this store specifically; the atomic Lua-script append-and-load operation and its concurrent-call ordering guarantee). Uses plain Lettuce (io.lettuce:lettuce-core), NOT a framework-specific Redis/Valkey integration (quarkus-redis-client / spring-boot-starter-data-redis / micronaut-redis-*) - this module is framework-neutral like decision-engine-core and decision-engine-jpa, and Lettuce is the underlying driver all three of those framework extensions wrap anyway, so using it directly here avoids three redundant per-framework integrations for one simple client.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-domain</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+            <version>6.5.5.RELEASE</version>
+            <!-- Version supplied by forwardmeasure-platform's own dependencyManagement
+                 for the default non-framework build. Framework bindings use this Netty 4.1
+                 compatible driver because Quarkus currently supplies Netty 4.1 at runtime. -->
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.testcontainers</groupId>
+            <artifactId>forwardmeasure-testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

@@ -1,0 +1,58 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Base environment values - see IMPLEMENTATION-SPEC.md Section 9.2. This repo's own helmfile is
+# scoped to one project, not a whole platform - one stage, not eight (contrast with
+# forwardmeasure-platform/deploy/helmfile's own environments/base.yaml.gotmpl).
+namespaces:
+  decisionEngine: decision-engine
+
+chartVersions:
+  decisionEngine: "0.1.0"
+  # valkey: pinned only when factWindow.valkey.mode is "embedded" - see helmfiles/10-decision-
+  # engine.yaml.gotmpl. Match whichever version forwardmeasure-platform's own chartVersions.valkey
+  # currently pins, for consistency, unless there's a specific reason to diverge.
+  valkey: "0.11.0"
+
+imageVersions:
+  decisionEngine:
+    # Which framework binding this environment runs - quarkus/spring/micronaut all built and
+    # verified per IMPLEMENTATION-SPEC.md Section 11.3 before any environment is expected to pick
+    # one over the others for real. TODO: set the real digest once a real image has been built and
+    # pushed, following the same two-independent-pull confirmation pattern used for OPA's own
+    # imageVersions.opa entry in forwardmeasure-platform/deploy/helmfile/environments/image-
+    # versions.yaml.
+    repository: docker.io/forwardmeasure/decision-engine-quarkus
+    tag: "0.1.0"
+    digest: ""
+    pullPolicy: IfNotPresent
+
+# ---------------------------------------------------------------------------
+# The Valkey embedded-vs-external toggle (IMPLEMENTATION-SPEC.md Section 9.1/9.2). "embedded" or
+# "external", not a boolean - a third mode (e.g. "disabled", for a deployment that only ever runs
+# STATELESS rulesets) can be added later without a breaking schema change.
+# ---------------------------------------------------------------------------
+factWindow:
+  valkey:
+    mode: embedded
+    external:
+      host: ""
+      port: 6379
+      credentialsSecret: ""
+
+database:
+  url: "jdbc:postgresql://localhost:5432/decision_engine"
+  credentialsSecret: decision-engine-database-credentials

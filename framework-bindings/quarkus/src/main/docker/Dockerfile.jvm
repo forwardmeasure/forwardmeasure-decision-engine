@@ -1,0 +1,9 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+# agreements. See the NOTICE file distributed with this work for additional information regarding
+# copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0.
+# You may obtain a copy of the License at https://www.apache.org/licenses/LICENSE-2.0
+FROM eclipse-temurin:25-jre
+WORKDIR /deployments
+COPY target/quarkus-app/ /deployments/
+USER 1001
+ENTRYPOINT ["java", "-jar", "/deployments/quarkus-run.jar"]

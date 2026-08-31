@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements. See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License. You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.forwardmeasure.platform</groupId>
+        <artifactId>forwardmeasure-platform</artifactId>
+        <version>1.0.0</version>
+        <relativePath>../forwardmeasure-platform/pom.xml</relativePath>
+    </parent>
+
+    <groupId>com.forwardmeasure.decisionengine</groupId>
+    <artifactId>forwardmeasure-decision-engine-parent</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+
+    <name>ForwardMeasure Decision Engine</name>
+    <description>Standalone, general-purpose Drools-based rule evaluation server, exposed over gRPC. Independently deployable - see docs/IMPLEMENTATION-SPEC.md for the full design.</description>
+    <url>https://github.com/forwardmeasure/forwardmeasure-decision-engine</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <scm>
+        <connection>scm:git:https://github.com/forwardmeasure/forwardmeasure-decision-engine.git</connection>
+        <developerConnection>scm:git:git@github.com:forwardmeasure/forwardmeasure-decision-engine.git</developerConnection>
+        <url>https://github.com/forwardmeasure/forwardmeasure-decision-engine</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/forwardmeasure/forwardmeasure-decision-engine/issues</url>
+    </issueManagement>
+
+    <properties>
+        <revision>1.0.0-SNAPSHOT</revision>
+        <forwardmeasure.platform.version>1.0.0</forwardmeasure.platform.version>
+        <forwardmeasure.jpa.version>1.0.0</forwardmeasure.jpa.version>
+        <forwardmeasure.testcontainers.version>1.0.0</forwardmeasure.testcontainers.version>
+
+        <!-- Not yet in forwardmeasure-platform's own BOM as of this repo's creation - see
+             IMPLEMENTATION-SPEC.md Section 3. grpc.version/protobuf.version/protoc.jar.version
+             ARE already in the platform BOM and must never be repinned here. -->
+        <drools.version>10.2.0</drools.version>
+
+        <container-image.build>false</container-image.build>
+        <container-image.push>false</container-image.push>
+        <container-image.registry>docker.io</container-image.registry>
+        <container-image.group>forwardmeasure</container-image.group>
+        <container-image.tag>${project.version}</container-image.tag>
+
+        <archunit.version>1.4.1</archunit.version>
+
+        <duplicate.finder.version>2.0.1</duplicate.finder.version>
+
+        <!-- Not in forwardmeasure-platform's own pluginManagement - the enforcer's
+             RequirePluginVersions rule (enforce-build, below) rejects the super-POM default
+             resolution, so this module pins it explicitly rather than each consuming module
+             (currently only decision-engine-api-language-bindings-java-grpc) doing so itself. -->
+        <build-helper-maven-plugin.version>3.6.1</build-helper-maven-plugin.version>
+    </properties>
+
+    <!-- Module order follows IMPLEMENTATION-SPEC.md Section 2 exactly. Do not reorder without
+         reordering the spec's own diagram to match. -->
+    <modules>
+        <module>decision-engine-api-specifications</module>
+        <module>decision-engine-api-language-bindings</module>
+        <module>decision-engine-domain</module>
+        <module>decision-engine-core</module>
+        <module>decision-engine-jpa</module>
+        <module>decision-engine-fact-window</module>
+        <module>decision-engine-grpc</module>
+        <module>decision-engine-database-migrations</module>
+        <module>decision-engine-database-migration-service</module>
+        <module>framework-bindings</module>
+        <module>decision-engine-architecture-tests</module>
+        <module>decision-engine-conformance-tests</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+        <dependency>
+            <groupId>com.forwardmeasure.platform</groupId>
+            <artifactId>forwardmeasure-platform-core-bom</artifactId>
+            <version>${forwardmeasure.platform.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.jpa</groupId>
+            <artifactId>forwardmeasure-jpa-bom</artifactId>
+            <version>${forwardmeasure.jpa.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.testcontainers</groupId>
+            <artifactId>forwardmeasure-testcontainers-bom</artifactId>
+            <version>${forwardmeasure.testcontainers.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.kie</groupId>
+            <artifactId>kie-api</artifactId>
+            <version>${drools.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.drools</groupId>
+            <artifactId>drools-core</artifactId>
+            <version>${drools.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.drools</groupId>
+            <artifactId>drools-compiler</artifactId>
+            <version>${drools.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.drools</groupId>
+            <artifactId>drools-mvel</artifactId>
+            <version>${drools.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-domain</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-jpa</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-fact-window</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-grpc</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-api-specifications</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-api-language-bindings-java-grpc</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-api-language-bindings-python-grpc</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-api-language-bindings-typescript-grpc</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-database-migrations</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-database-migration-service</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-quarkus</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-spring</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-micronaut</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <release>${maven.compiler.release}</release>
+                        <parameters>true</parameters>
+                        <showWarnings>true</showWarnings>
+                        <compilerArgs>
+                            <arg>-Xlint:all,-processing</arg>
+                        </compilerArgs>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok-mapstruct-binding</artifactId>
+                                <version>${lombok-mapstruct-binding.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.mapstruct</groupId>
+                                <artifactId>mapstruct-processor</artifactId>
+                                <version>${mapstruct.version}</version>
+                            </path>
+                            <path>
+                                <groupId>org.hibernate.orm</groupId>
+                                <artifactId>hibernate-processor</artifactId>
+                                <version>${hibernate.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+                <plugin><groupId>io.quarkus</groupId><artifactId>quarkus-maven-plugin</artifactId></plugin>
+                <plugin><groupId>io.smallrye</groupId><artifactId>jandex-maven-plugin</artifactId></plugin>
+                <plugin>
+                    <groupId>org.apache.rat</groupId>
+                    <artifactId>apache-rat-plugin</artifactId>
+                </plugin>
+                <plugin>
+                    <groupId>org.basepom.maven</groupId>
+                    <artifactId>duplicate-finder-maven-plugin</artifactId>
+                    <version>${duplicate.finder.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>build-helper-maven-plugin</artifactId>
+                    <version>${build-helper-maven-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions><execution><id>enforce-build</id><goals><goal>enforce</goal></goals><configuration><rules>
+                    <requireJavaVersion><version>[25,26)</version></requireJavaVersion>
+                    <requireMavenVersion><version>[3.9.9,4)</version></requireMavenVersion>
+                    <dependencyConvergence/>
+                </rules></configuration></execution></executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <configuration><flattenMode>ossrh</flattenMode><updatePomFile>true</updatePomFile></configuration>
+                <executions>
+                    <execution><id>flatten</id><phase>process-resources</phase><goals><goal>flatten</goal></goals></execution>
+                    <execution><id>flatten-clean</id><phase>clean</phase><goals><goal>clean</goal></goals></execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <executions>
+                    <execution><id>make-index</id><goals><goal>jandex</goal></goals></execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.rat</groupId>
+                <artifactId>apache-rat-plugin</artifactId>
+                <configuration>
+                    <inputExcludes>
+                        <inputExclude>.git/**</inputExclude>
+                        <inputExclude>.gitignore</inputExclude>
+                        <inputExclude>**/*.md</inputExclude>
+                        <inputExclude>**/target/**</inputExclude>
+                        <inputExclude>**/node_modules/**</inputExclude>
+                        <inputExclude>**/*.proto</inputExclude>
+                        <inputExclude>**/*.drl</inputExclude>
+                    </inputExcludes>
+                </configuration>
+                <executions>
+                    <execution><id>license-check</id><phase>verify</phase><goals><goal>check</goal></goals></execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>container-image</id>
+            <properties>
+                <container-image.build>true</container-image.build>
+            </properties>
+        </profile>
+    </profiles>
+</project>

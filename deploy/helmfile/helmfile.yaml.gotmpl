@@ -1,0 +1,71 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Self-contained - this repository's own deployment does not depend on forwardmeasure-platform/
+# deploy or the shared helm-charts repository (IMPLEMENTATION-SPEC.md Section 9). Both remain
+# possible additive integrations later; this file must work with nothing beyond this repository.
+#
+# One release group, inlined directly here rather than split into a separate helmfiles/*.yaml.gotmpl
+# dispatched from this file - forwardmeasure-platform/deploy's own multi-stage split (00-foundation,
+# 10-platform-configuration, 20-identity, ...) exists because that repository orchestrates eight-plus
+# unrelated pieces of shared platform infrastructure; this repository deploys exactly one thing.
+# Introduce that extra layer of indirection only if this repository's own deployment genuinely grows
+# past one logical stage - do not add it preemptively.
+helmDefaults:
+  wait: true
+  waitForJobs: true
+  timeout: 1800
+  atomic: true
+  createNamespace: false
+
+environments:
+  base:
+    values:
+      - environments/base.yaml.gotmpl
+
+---
+
+{{- $valkeyMode := .Values.factWindow.valkey.mode }}
+
+repositories:
+  - name: valkey
+    url: https://valkey.io/valkey-helm
+
+releases:
+  # See IMPLEMENTATION-SPEC.md Section 9.2 for the full rationale - this conditional-release
+  # mechanism (installed: conditional true/false) is the SAME pattern already
+  # proven in forwardmeasure-platform/deploy/helmfile/helmfiles/10-platform-configuration.yaml.gotmpl
+  # for platform-secrets/platform-routing. Deliberately NOT using Helm's native subchart
+  # `condition:` dependency mechanism in Chart.yaml - nothing in this ecosystem uses that mechanism
+  # yet, and reusing an already-proven pattern beats introducing a second way to do the same thing.
+  - name: decision-engine-valkey
+    namespace: {{ .Values.namespaces.decisionEngine }}
+    chart: valkey/valkey
+    version: {{ .Values.chartVersions.valkey | quote }}
+    installed: {{ if eq $valkeyMode "embedded" }}true{{ else }}false{{ end }}
+    labels: {component: fact-window}
+
+  - name: decision-engine
+    namespace: {{ .Values.namespaces.decisionEngine }}
+    chart: ../helm/decision-engine
+    version: {{ .Values.chartVersions.decisionEngine | quote }}
+    labels: {component: server}
+    needs:
+      {{- if eq $valkeyMode "embedded" }}
+      - {{ .Values.namespaces.decisionEngine }}/decision-engine-valkey
+      {{- end }}
+    values:
+      - releases/decision-engine/base.yaml.gotmpl

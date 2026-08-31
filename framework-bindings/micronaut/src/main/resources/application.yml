@@ -1,0 +1,38 @@
+micronaut:
+  application:
+    name: decision-engine
+  server:
+    port: 8080
+datasources:
+  default:
+    url: ${DECISION_ENGINE_DATABASE_URL}
+    username: ${DECISION_ENGINE_DATABASE_USERNAME}
+    password: ${DECISION_ENGINE_DATABASE_PASSWORD}
+    driverClassName: org.postgresql.Driver
+jpa:
+  default:
+    packages-to-scan:
+      - com.forwardmeasure.jpa.identity.entity
+      - com.forwardmeasure.jpa.locking.entity
+      - com.forwardmeasure.jpa.asynctask.entity
+      - com.forwardmeasure.decisionengine.jpa.entity
+    entity-scan:
+      enabled: true
+      packages:
+        - com.forwardmeasure.jpa.identity.entity
+        - com.forwardmeasure.jpa.locking.entity
+        - com.forwardmeasure.jpa.asynctask.entity
+        - com.forwardmeasure.decisionengine.jpa.entity
+    properties:
+      hibernate:
+        hbm2ddl:
+          auto: none
+decision-engine:
+  valkey:
+    host: ${DECISION_ENGINE_VALKEY_HOST}
+    port: ${DECISION_ENGINE_VALKEY_PORT:6379}
+    password: ${DECISION_ENGINE_VALKEY_PASSWORD:}
+ # Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+ # agreements. See the NOTICE file distributed with this work for additional information regarding
+ # copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0.
+ # You may obtain a copy of the License at https://www.apache.org/licenses/LICENSE-2.0

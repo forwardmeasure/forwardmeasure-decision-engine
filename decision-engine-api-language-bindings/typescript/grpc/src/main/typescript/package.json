@@ -1,0 +1,13 @@
+{
+  "name": "@forwardmeasure/decision-engine-grpc-client",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "generate": "node -e \"require('fs').mkdirSync('src',{recursive:true})\" && grpc_tools_node_protoc --plugin=protoc-gen-ts_proto=node_modules/ts-proto/protoc-gen-ts_proto --ts_proto_out=src --ts_proto_opt=outputServices=grpc-js,esModuleInterop=true,forceLong=long,useOptionals=messages --proto_path=proto proto/forwardmeasure/decisionengine/v1/evaluation.proto proto/forwardmeasure/decisionengine/v1/ruleset_management.proto"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.13.4",
+    "grpc-tools": "^1.13.0",
+    "ts-proto": "^2.7.7"
+  }
+}

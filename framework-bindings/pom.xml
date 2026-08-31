@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements. See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License. You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.forwardmeasure.decisionengine</groupId>
+        <artifactId>forwardmeasure-decision-engine-parent</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <groupId>com.forwardmeasure.decisionengine</groupId>
+    <artifactId>decision-engine-framework-bindings</artifactId>
+    <packaging>pom</packaging>
+
+    <name>Decision Engine :: Framework Bindings</name>
+    <description>Quarkus, Spring, and Micronaut bindings at parity - each wires only its own framework's own gRPC extension (quarkus-grpc / spring-boot-grpc-server / micronaut-grpc) for transport registration, plus JPA/Postgres for decision-engine-jpa. No Drools-specific framework integration anywhere in these three modules - see IMPLEMENTATION-SPEC.md Section 13 item 1.</description>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Quarkus currently brings Netty 4.1. Lettuce 6.5 is the compatible driver line;
+                 Lettuce 7.x requires the Netty 4.2 API and fails at runtime in these images. -->
+            <dependency>
+                <groupId>io.lettuce</groupId>
+                <artifactId>lettuce-core</artifactId>
+                <version>6.5.5.RELEASE</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <modules>
+        <module>quarkus</module>
+        <module>spring</module>
+        <module>micronaut</module>
+    </modules>
+</project>

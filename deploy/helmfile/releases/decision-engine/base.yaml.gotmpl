@@ -1,0 +1,46 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# See IMPLEMENTATION-SPEC.md Section 9.2: when factWindow.valkey.mode is "embedded", this file
+# points at the in-cluster Service DNS name the decision-engine-valkey release (same helmfile,
+# same namespace) produces; when "external", it passes through the operator-supplied values
+# directly. decision-engine-fact-window's ValkeyFactWindowStore only ever sees a plain host:port -
+# it has no idea which of these two cases produced it, by design.
+{{- $valkeyMode := .Values.factWindow.valkey.mode }}
+image:
+  repository: {{ .Values.imageVersions.decisionEngine.repository | quote }}
+  tag: {{ .Values.imageVersions.decisionEngine.tag | quote }}
+  digest: {{ .Values.imageVersions.decisionEngine.digest | quote }}
+  pullPolicy: {{ .Values.imageVersions.decisionEngine.pullPolicy | quote }}
+imagePullSecrets: [{name: docker-io-credentials}]
+
+database:
+  url: {{ .Values.database.url | quote }}
+  credentialsSecret: {{ .Values.database.credentialsSecret | quote }}
+
+factWindow:
+  valkey:
+    {{- if eq $valkeyMode "embedded" }}
+    # Standard in-cluster Service DNS for the decision-engine-valkey release in this same
+    # namespace - the valkey/valkey chart creates a Service named after the release.
+    host: {{ printf "decision-engine-valkey.%s.svc.cluster.local" .Values.namespaces.decisionEngine | quote }}
+    port: 6379
+    credentialsSecret: decision-engine-valkey-auth
+    {{- else }}
+    host: {{ .Values.factWindow.valkey.external.host | quote }}
+    port: {{ .Values.factWindow.valkey.external.port }}
+    credentialsSecret: {{ .Values.factWindow.valkey.external.credentialsSecret | quote }}
+    {{- end }}

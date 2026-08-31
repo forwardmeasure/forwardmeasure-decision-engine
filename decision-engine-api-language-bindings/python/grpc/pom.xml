@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements. See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License. You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.forwardmeasure.decisionengine</groupId>
+        <artifactId>decision-engine-api-language-bindings-python</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <groupId>com.forwardmeasure.decisionengine</groupId>
+    <artifactId>decision-engine-api-language-bindings-python-grpc</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Decision Engine :: API Language Bindings :: Python :: gRPC</name>
+    <description>Generated Python protobuf bindings using a Maven-managed protoc toolchain.</description>
+
+    <properties>
+        <python.executable>python3</python.executable>
+    </properties>
+
+    <build>
+        <extensions>
+            <extension>
+                <groupId>kr.motd.maven</groupId>
+                <artifactId>os-maven-plugin</artifactId>
+                <version>1.7.1</version>
+            </extension>
+        </extensions>
+        <resources>
+            <resource>
+                <directory>${project.build.directory}/generated-python</directory>
+                <targetPath>decisionengine-python</targetPath>
+            </resource>
+        </resources>
+        <plugins>
+            <!-- Resolve protoc and the well-known protobuf definitions through Maven. The
+                 executable is unpacked into target and is never taken from PATH. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-protoc-executable</id>
+                        <phase>generate-sources</phase>
+                        <goals><goal>copy</goal></goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>com.google.protobuf</groupId>
+                                    <artifactId>protoc</artifactId>
+                                    <version>${protobuf.version}</version>
+                                    <type>exe</type>
+                                    <classifier>${os.detected.classifier}</classifier>
+                                    <outputDirectory>${project.build.directory}/protoc-bin</outputDirectory>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>unpack-protobuf-includes</id>
+                        <phase>generate-sources</phase>
+                        <goals><goal>unpack</goal></goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>com.google.protobuf</groupId>
+                                    <artifactId>protobuf-java</artifactId>
+                                    <version>${protobuf.version}</version>
+                                    <type>jar</type>
+                                    <includes>google/protobuf/*.proto</includes>
+                                    <outputDirectory>${project.build.directory}/protoc-include</outputDirectory>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>stage-proto-specification</id>
+                        <phase>generate-sources</phase>
+                        <goals><goal>copy-resources</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/python-proto</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/../../../decision-engine-api-specifications/src/main/resources/META-INF/proto</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>create-python-output-directory</id>
+                        <phase>generate-sources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>mkdir</executable>
+                            <arguments>
+                                <argument>-p</argument>
+                                <argument>${project.build.directory}/generated-python</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>make-protoc-executable</id>
+                        <phase>generate-sources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>chmod</executable>
+                            <arguments>
+                                <argument>+x</argument>
+                                <argument>${project.build.directory}/protoc-bin/protoc-${protobuf.version}-${os.detected.classifier}.exe</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>generate-python-protobuf-bindings</id>
+                        <phase>generate-sources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>${project.build.directory}/protoc-bin/protoc-${protobuf.version}-${os.detected.classifier}.exe</executable>
+                            <arguments>
+                                <argument>--proto_path=${project.build.directory}/python-proto</argument>
+                                <argument>--proto_path=${project.build.directory}/protoc-include</argument>
+                                <argument>--python_out=${project.build.directory}/generated-python</argument>
+                                <argument>forwardmeasure/decisionengine/v1/evaluation.proto</argument>
+                                <argument>forwardmeasure/decisionengine/v1/ruleset_management.proto</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>install-python-grpc-toolchain</id>
+                        <phase>generate-sources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>${python.executable}</executable>
+                            <arguments>
+                                <argument>-m</argument>
+                                <argument>pip</argument>
+                                <argument>install</argument>
+                                <argument>--target=${project.build.directory}/python-toolchain</argument>
+                                <argument>--disable-pip-version-check</argument>
+                                <argument>--no-warn-script-location</argument>
+                                <argument>grpcio-tools==${grpc.version}</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>generate-python-grpc-service-bindings</id>
+                        <phase>generate-sources</phase>
+                        <goals><goal>exec</goal></goals>
+                        <configuration>
+                            <executable>${python.executable}</executable>
+                            <environmentVariables>
+                                <PYTHONPATH>${project.build.directory}/python-toolchain</PYTHONPATH>
+                            </environmentVariables>
+                            <arguments>
+                                <argument>-m</argument>
+                                <argument>grpc_tools.protoc</argument>
+                                <argument>--proto_path=${project.build.directory}/python-proto</argument>
+                                <argument>--python_out=${project.build.directory}/generated-python</argument>
+                                <argument>--pyi_out=${project.build.directory}/generated-python</argument>
+                                <argument>--grpc_python_out=${project.build.directory}/generated-python</argument>
+                                <argument>forwardmeasure/decisionengine/v1/evaluation.proto</argument>
+                                <argument>forwardmeasure/decisionengine/v1/ruleset_management.proto</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <dependencies>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-api-specifications</artifactId>
+        </dependency>
+    </dependencies>
+</project>
