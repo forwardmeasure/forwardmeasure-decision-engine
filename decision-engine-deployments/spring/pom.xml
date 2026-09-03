@@ -31,7 +31,7 @@
     <artifactId>decision-engine-spring</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: Spring</name>
+    <name>ForwardMeasure Decision Engine :: Spring</name>
     <description>Spring gRPC + persistence wiring only - IMPLEMENTATION-SPEC.md Section 8.3. Uses the first-party spring-boot-grpc-server (Spring Boot 4.1+) - NOT net.devh:grpc-server-spring-boot-starter. Apply the EntityManager producer fix already discovered in the parallel forwardmeasure-agent-os investigation (spring-boot-starter-data-jpa never registers a plain injectable EntityManager bean) - check first whether forwardmeasure-jpa-spring's ForwardMeasureJpaAutoConfiguration has since been fixed upstream before adding a local producer here.</description>
 
     <dependencyManagement>

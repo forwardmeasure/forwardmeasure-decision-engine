@@ -31,7 +31,7 @@
     <artifactId>decision-engine-database-migrations</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: Database Migrations</name>
+    <name>ForwardMeasure Decision Engine :: Database Migrations</name>
     <description>Liquibase changelog + RulesetSchemaMigrator for ruleset DEFINITIONS only (IMPLEMENTATION-SPEC.md Section 7.3) - a direct port of forwardmeasure-agent-os's own AgentOsTenantMigrator, itself ported from openworkflow-migrations. Single-tenant (one fixed schema, not schema-per-tenant - Section 13 item 3), same two-credential model (this module's own migrator connects as the administrator credential; decision-engine-jpa's runtime services never do).</description>
 
     <dependencies>

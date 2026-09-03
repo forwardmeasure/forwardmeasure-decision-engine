@@ -31,7 +31,7 @@
     <artifactId>decision-engine-api-language-bindings-typescript-grpc</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: API Language Bindings :: TypeScript :: gRPC</name>
+    <name>ForwardMeasure Decision Engine :: API Language Bindings :: TypeScript :: gRPC</name>
     <description>Generated TypeScript gRPC clients using a Maven-managed Node/npm toolchain.</description>
 
     <build>

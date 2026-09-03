@@ -17,10 +17,10 @@ import com.forwardmeasure.decisionengine.domain.RulesetSource;
 import com.forwardmeasure.decisionengine.domain.RulesetVersion;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import org.kie.api.event.rule.AfterMatchFiredEvent;
 import org.kie.api.event.rule.DefaultAgendaEventListener;
 import org.kie.api.runtime.KieContainer;
@@ -29,22 +29,38 @@ import org.kie.api.runtime.KieSession;
 /** Framework-neutral Drools evaluator. */
 public final class DroolsRuleEvaluator implements RuleEvaluator {
 
+  public static final int DEFAULT_CACHE_CAPACITY = 100;
+
   private record CacheKey(String ruleset, long version) {}
 
   private final RulesetSource rulesetSource;
   private final FactWindowStore factWindowStore;
   private final DrlCompiler compiler;
-  private final ConcurrentHashMap<CacheKey, KieContainer> containers = new ConcurrentHashMap<>();
+  private final int cacheCapacity;
+  private final Map<CacheKey, KieContainer> containers;
 
   public DroolsRuleEvaluator(RulesetSource rulesetSource, FactWindowStore factWindowStore) {
-    this(rulesetSource, factWindowStore, new DrlCompiler());
+    this(rulesetSource, factWindowStore, new DrlCompiler(), DEFAULT_CACHE_CAPACITY);
+  }
+
+  public DroolsRuleEvaluator(
+      RulesetSource rulesetSource,
+      FactWindowStore factWindowStore,
+      DrlCompiler compiler,
+      int cacheCapacity) {
+    this.rulesetSource = Objects.requireNonNull(rulesetSource, "rulesetSource");
+    this.factWindowStore = factWindowStore;
+    this.compiler = Objects.requireNonNull(compiler, "compiler");
+    if (cacheCapacity < 1) {
+      throw new IllegalArgumentException("cacheCapacity must be greater than zero");
+    }
+    this.cacheCapacity = cacheCapacity;
+    this.containers = new LinkedHashMap<>(cacheCapacity, 0.75f, true);
   }
 
   DroolsRuleEvaluator(
       RulesetSource rulesetSource, FactWindowStore factWindowStore, DrlCompiler compiler) {
-    this.rulesetSource = Objects.requireNonNull(rulesetSource, "rulesetSource");
-    this.factWindowStore = factWindowStore;
-    this.compiler = Objects.requireNonNull(compiler, "compiler");
+    this(rulesetSource, factWindowStore, compiler, DEFAULT_CACHE_CAPACITY);
   }
 
   @Override
@@ -64,10 +80,7 @@ public final class DroolsRuleEvaluator implements RuleEvaluator {
     }
     KieSession session = null;
     try {
-      KieContainer container =
-          containers.computeIfAbsent(
-              new CacheKey(version.ruleset(), version.version()),
-              ignored -> compiler.compile(version.ruleset(), version.version(), version.drl()));
+      KieContainer container = getOrCompile(version);
       session = container.newKieSession();
       List<String> firedRules = new ArrayList<>();
       session.addEventListener(
@@ -142,6 +155,34 @@ public final class DroolsRuleEvaluator implements RuleEvaluator {
       if (session != null) {
         session.dispose();
       }
+    }
+  }
+
+  private KieContainer getOrCompile(RulesetVersion version) {
+    CacheKey key = new CacheKey(version.ruleset(), version.version());
+    synchronized (containers) {
+      KieContainer cached = containers.get(key);
+      if (cached != null) {
+        return cached;
+      }
+      KieContainer compiled = compiler.compile(version.ruleset(), version.version(), version.drl());
+      containers.put(key, compiled);
+      if (containers.size() > cacheCapacity) {
+        containers.remove(containers.keySet().iterator().next());
+      }
+      return compiled;
+    }
+  }
+
+  int cachedContainerCount() {
+    synchronized (containers) {
+      return containers.size();
+    }
+  }
+
+  boolean isContainerCached(String ruleset, long version) {
+    synchronized (containers) {
+      return containers.containsKey(new CacheKey(ruleset, version));
     }
   }
 }

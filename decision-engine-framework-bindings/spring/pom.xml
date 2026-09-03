@@ -10,7 +10,7 @@
     <modelVersion>4.0.0</modelVersion>
     <parent><groupId>com.forwardmeasure.decisionengine</groupId><artifactId>decision-engine-framework-bindings</artifactId><version>${revision}</version><relativePath>../pom.xml</relativePath></parent>
     <artifactId>decision-engine-spring-binding</artifactId><packaging>jar</packaging>
-    <name>Decision Engine :: Spring Binding</name>
+    <name>ForwardMeasure Decision Engine :: Spring Binding</name>
     <description>Reusable Spring integration. Executable assembly and container image configuration live in decision-engine-deployments/spring.</description>
     <dependencyManagement><dependencies>
         <dependency><groupId>com.forwardmeasure.platform</groupId><artifactId>forwardmeasure-platform-spring-bom</artifactId><version>${forwardmeasure.platform.version}</version><type>pom</type><scope>import</scope></dependency>

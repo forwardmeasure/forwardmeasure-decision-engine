@@ -9,6 +9,7 @@
 package com.forwardmeasure.decisionengine.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.forwardmeasure.decisionengine.domain.EvaluationInput;
@@ -98,6 +99,50 @@ class DroolsRuleEvaluatorTest {
             () -> evaluator.evaluate(new EvaluationInput("payments", null, Map.of(), " ")));
 
     assertEquals(RuleEvaluationException.Reason.INVALID_SESSION_KEY, exception.reason());
+  }
+
+  @Test
+  void compiledContainerCacheEvictsLeastRecentlyUsedEntry() {
+    Map<Long, RulesetVersion> versions =
+        Map.of(
+            1L, version(RulesetMode.STATELESS, 1, APPROVAL_RULE),
+            2L, version(RulesetMode.STATELESS, 2, APPROVAL_RULE),
+            3L, version(RulesetMode.STATELESS, 3, APPROVAL_RULE));
+    RulesetSource source =
+        new RulesetSource() {
+          @Override
+          public RulesetVersion getActiveVersion(String ruleset) {
+            return versions.get(1L);
+          }
+
+          @Override
+          public RulesetVersion getVersion(String ruleset, long number) {
+            return versions.get(number);
+          }
+        };
+    DroolsRuleEvaluator evaluator = new DroolsRuleEvaluator(source, null, new DrlCompiler(), 2);
+
+    evaluator.evaluate(new EvaluationInput("payments", 1L, Map.of("approved", true), null));
+    evaluator.evaluate(new EvaluationInput("payments", 2L, Map.of("approved", true), null));
+    evaluator.evaluate(new EvaluationInput("payments", 1L, Map.of("approved", true), null));
+    evaluator.evaluate(new EvaluationInput("payments", 3L, Map.of("approved", true), null));
+
+    assertEquals(2, evaluator.cachedContainerCount());
+    assertFalse(evaluator.isContainerCached("payments", 2));
+    assertEquals(true, evaluator.isContainerCached("payments", 1));
+    assertEquals(true, evaluator.isContainerCached("payments", 3));
+  }
+
+  @Test
+  void rejectsNonPositiveCompiledContainerCacheCapacity() {
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            new DroolsRuleEvaluator(
+                source(version(RulesetMode.STATELESS, 1, APPROVAL_RULE)),
+                null,
+                new DrlCompiler(),
+                0));
   }
 
   private static RulesetVersion version(RulesetMode mode, long number, String drl) {

@@ -77,7 +77,7 @@ forwardmeasure-decision-engine/
 ├── decision-engine-database-migrations/       (Liquibase changelog + schema migrator for ruleset
 │                                                DEFINITIONS only - mirrors the pattern in
 │                                                Section 7.3)
-├── framework-bindings/                         (reusable framework integration only)
+├── decision-engine-framework-bindings/         (reusable framework integration only)
 │   ├── quarkus/
 │   ├── spring/
 │   └── micronaut/
@@ -177,8 +177,8 @@ a version conflict, fix the dependency declaration, not the pinned version.
                           ┌─────────────────────────┼─────────────────────────┐
                           │                         │                         │
                 ┌─────────▼─────────┐    ┌──────────▼──────────┐    ┌─────────▼─────────┐
-                │  framework-bindings │    │  framework-bindings   │    │ framework-bindings │
-                │       /quarkus       │    │       /spring          │    │     /micronaut      │
+                │ decision-engine-fw-  │    │ decision-engine-fw-     │    │ decision-engine-fw-  │
+                │ bindings/quarkus    │    │ bindings/spring         │    │ bindings/micronaut  │
                 │ (quarkus-grpc wiring │    │ (spring-boot-grpc-     │    │ (micronaut-grpc     │
                 │  ONLY)               │    │  server wiring ONLY)   │    │  wiring ONLY)       │
                 └─────────────────────┘    └───────────────────────┘    └───────────────────┘
@@ -923,7 +923,7 @@ the hard way in production; this is exactly the kind of validation Section 7.3's
 guidance should also warn about.
 
 **This module has no `@GrpcService`, no Spring `@Bean`, no Micronaut `@Singleton` anywhere in it.**
-Those annotations belong exclusively in the three `framework-bindings/*` modules below; the
+Those annotations belong exclusively in the three `decision-engine-framework-bindings/*` modules below; the
 executable entry points and image assembly belong in `decision-engine-deployments/*`.
 
 ### 8.2 Quarkus binding
@@ -1091,7 +1091,7 @@ concern, invisible to the application code.
 database-migration-service Job image — same `Dockerfile.jvm` shapes already proven for each
 framework in `forwardmeasure-agent-os`. The Maven modules under `decision-engine-deployments` own
 the executable entry points, runtime assembly, Dockerfiles, and image builds; the modules under
-`framework-bindings` are reusable framework integration libraries only.
+`decision-engine-framework-bindings` are reusable framework integration libraries only.
 
 ---
 
@@ -1191,14 +1191,13 @@ it out — flagging in case this was wrong` comment instead.
    (exactly as OPA's `policyPath` allows today), but this project itself has no concept of a tenant.
 4. **No maker-checker / approval workflow for ruleset versions.** Create → optionally activate →
    list → get-active → delete. That is the whole lifecycle. No draft/review/approved states.
-5. **No LRU/TTL eviction logic hand-written for the `KieBaseCache`** (the compiled-rules cache in
-   `decision-engine-core`, keyed by `(ruleset, version)`, Section 7.4's "reintroducing sketch" refers
-   to this too) — a plain unbounded `ConcurrentHashMap` is sufficient; the number of distinct
-   `(ruleset, version)` pairs any real deployment holds is small, and a version's DRL is immutable
-   once created, so nothing ever needs invalidating, only occasionally growing. This is a
-   **different** cache from the fact window (Section 7.4), which *does* need eviction and gets it
-   for free from Valkey's native TTL/`LTRIM` — do not confuse the two or apply this non-goal to the
-   fact window by mistake.
+5. The compiled-rules cache in `decision-engine-core`, keyed by `(ruleset, version)`, MUST remain
+   local and bounded. It uses a small in-process access-ordered cache with a default capacity of
+   100 compiled containers; callers may provide a different positive capacity when constructing
+   `DroolsRuleEvaluator`. Eviction only removes the local reference: ruleset versions are
+   immutable and remain available from `RulesetSource`, so a later evaluation may recompile an
+   evicted version. Do not replace this with a distributed cache or confuse it with the fact window
+   (Section 7.4), which gets its eviction from Valkey's native TTL/`LTRIM`.
 6. **No sticky/session-affine gRPC routing.** The fact window (Section 7.4) exists specifically so
    this is never needed. If you find yourself reaching for consistent-hash load balancing or
    session-affinity configuration to make statefulness work, that means Section 7.4 was not

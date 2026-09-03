@@ -31,7 +31,7 @@
     <artifactId>decision-engine-api-language-bindings-java-grpc</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: API Language Bindings :: Java :: gRPC</name>
+    <name>ForwardMeasure Decision Engine :: API Language Bindings :: Java :: gRPC</name>
     <description>Generated Java message + gRPC client/server stub classes, generated from decision-engine-api-specifications' packaged .proto sources (unpacked below, never read directly from that module's own source tree). Maven resolves the platform-specific protoc and protoc-gen-grpc-java artifacts; no globally installed compiler is required.</description>
 
     <dependencies>

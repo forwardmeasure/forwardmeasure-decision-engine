@@ -31,7 +31,7 @@
     <artifactId>decision-engine-core</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: Core</name>
+    <name>ForwardMeasure Decision Engine :: Core</name>
     <description>DroolsRuleEvaluator: the ONLY place in this whole repository that touches org.kie.api/org.drools directly (IMPLEMENTATION-SPEC.md Section 4's central rule, enforced by decision-engine-architecture-tests). Depends on decision-engine-domain for the RuleEvaluator/FactWindowStore ports it implements/consumes and on a RulesetSource port (defined in this module, implemented in decision-engine-jpa) for compiled ruleset definitions. No Quarkus/Spring/Micronaut dependency anywhere in this module, ever - see Section 13 item 1.</description>
 
     <dependencies>

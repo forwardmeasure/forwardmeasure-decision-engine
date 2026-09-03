@@ -18,7 +18,7 @@
     </parent>
     <artifactId>decision-engine-deployments</artifactId>
     <packaging>pom</packaging>
-    <name>Decision Engine :: Deployments</name>
+    <name>ForwardMeasure Decision Engine :: Deployments</name>
     <description>Executable decision-engine services and migration jobs. Framework integration remains in decision-engine-framework-bindings; these modules own application assembly, entry points, Dockerfiles, and container images.</description>
     <modules>
         <module>quarkus</module>

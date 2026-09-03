@@ -31,7 +31,7 @@
     <artifactId>decision-engine-domain</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: Domain</name>
+    <name>ForwardMeasure Decision Engine :: Domain</name>
     <description>Transport- and framework-neutral core: RuleEvaluator port, FactWindowStore port, EvaluationInput/EvaluationOutcome value types, RulesetMode, exceptions. No I/O, no dependency on decision-engine-api-language-bindings-java-grpc (the generated gRPC wire types) or any Drools/kie-api type - see IMPLEMENTATION-SPEC.md Sections 4 and 7.2. decision-engine-grpc is the only module that translates between this module's plain types and the generated wire types.</description>
 
     <dependencies>

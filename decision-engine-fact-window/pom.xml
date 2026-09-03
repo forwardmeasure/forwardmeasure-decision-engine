@@ -31,7 +31,7 @@
     <artifactId>decision-engine-fact-window</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: Fact Window</name>
+    <name>ForwardMeasure Decision Engine :: Fact Window</name>
     <description>ValkeyFactWindowStore: the fact-HISTORY store for STATEFUL rulesets - see IMPLEMENTATION-SPEC.md Section 7.4 for the full design rationale (why Valkey, not Postgres; why not a long-lived in-process KieSession; the fail-closed rule for this store specifically; the atomic Lua-script append-and-load operation and its concurrent-call ordering guarantee). Uses plain Lettuce (io.lettuce:lettuce-core), NOT a framework-specific Redis/Valkey integration (quarkus-redis-client / spring-boot-starter-data-redis / micronaut-redis-*) - this module is framework-neutral like decision-engine-core and decision-engine-jpa, and Lettuce is the underlying driver all three of those framework extensions wrap anyway, so using it directly here avoids three redundant per-framework integrations for one simple client.</description>
 
     <dependencies>

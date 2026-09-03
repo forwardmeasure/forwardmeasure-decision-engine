@@ -95,7 +95,7 @@
         <module>decision-engine-fact-window</module>
         <module>decision-engine-grpc</module>
         <module>decision-engine-database-migrations</module>
-        <module>framework-bindings</module>
+        <module>decision-engine-framework-bindings</module>
         <module>decision-engine-deployments</module>
         <module>decision-engine-architecture-tests</module>
         <module>decision-engine-conformance-tests</module>

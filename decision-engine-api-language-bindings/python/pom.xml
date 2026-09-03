@@ -31,7 +31,7 @@
     <artifactId>decision-engine-api-language-bindings-python</artifactId>
     <packaging>pom</packaging>
 
-    <name>Decision Engine :: API Language Bindings :: Python</name>
+    <name>ForwardMeasure Decision Engine :: API Language Bindings :: Python</name>
     <description>Generated Python clients, staged as a jar resource for downstream Python consumers.</description>
 
     <modules>

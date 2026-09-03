@@ -31,7 +31,7 @@
     <artifactId>decision-engine-quarkus</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: Quarkus</name>
+    <name>ForwardMeasure Decision Engine :: Quarkus</name>
     <description>Quarkus gRPC + persistence wiring only - IMPLEMENTATION-SPEC.md Section 8.2. Apply the quarkus.hibernate-orm.mapping.format.global=ignore fix (discovered in the parallel forwardmeasure-agent-os investigation) from day one - this project has the same JSON-column-vs-Quarkus-Jackson conflict.</description>
 
     <properties>

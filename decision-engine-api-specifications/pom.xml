@@ -31,7 +31,7 @@
     <artifactId>decision-engine-api-specifications</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: API Specifications</name>
+    <name>ForwardMeasure Decision Engine :: API Specifications</name>
     <description>
         Canonical, SINGLE-COPY interface-definition sources for this service, one directory per
         wire protocol under META-INF - mirrors agent-os-api-specifications' own META-INF/openapi

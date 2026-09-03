@@ -31,7 +31,7 @@
     <artifactId>decision-engine-api-language-bindings-java</artifactId>
     <packaging>pom</packaging>
 
-    <name>Decision Engine :: API Language Bindings :: Java</name>
+    <name>ForwardMeasure Decision Engine :: API Language Bindings :: Java</name>
     <description></description>
 
     <modules>

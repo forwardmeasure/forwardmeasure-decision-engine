@@ -31,7 +31,7 @@
     <artifactId>decision-engine-api-language-bindings</artifactId>
     <packaging>pom</packaging>
 
-    <name>Decision Engine :: API Language Bindings</name>
+    <name>ForwardMeasure Decision Engine :: API Language Bindings</name>
     <description>
         Generated clients/stubs for decision-engine-api-specifications' canonical interface
         definitions - mirrors agent-os-api-language-bindings' own {java,python,typescript} split in

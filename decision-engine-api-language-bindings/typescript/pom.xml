@@ -31,7 +31,7 @@
     <artifactId>decision-engine-api-language-bindings-typescript</artifactId>
     <packaging>pom</packaging>
 
-    <name>Decision Engine :: API Language Bindings :: TypeScript</name>
+    <name>ForwardMeasure Decision Engine :: API Language Bindings :: TypeScript</name>
     <description>Generated TypeScript clients, staged as a jar resource for downstream TypeScript/Node consumers.</description>
 
     <modules>

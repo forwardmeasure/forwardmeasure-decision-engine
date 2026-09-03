@@ -31,7 +31,7 @@
     <artifactId>decision-engine-jpa</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: JPA</name>
+    <name>ForwardMeasure Decision Engine :: JPA</name>
     <description>Ruleset DEFINITION persistence only (RulesetVersionEntity/Repository/Service, Postgres via forwardmeasure-jpa) - see IMPLEMENTATION-SPEC.md Section 7.3. Implements decision-engine-core's RulesetSource port. Deliberately does NOT hold the fact window (Section 7.4, a different module, a different store) - do not add Valkey/fact-window code here.</description>
 
     <dependencies>

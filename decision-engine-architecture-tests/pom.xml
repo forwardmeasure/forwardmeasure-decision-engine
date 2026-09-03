@@ -31,7 +31,7 @@
     <artifactId>decision-engine-architecture-tests</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: Architecture Tests</name>
+    <name>ForwardMeasure Decision Engine :: Architecture Tests</name>
     <description>ArchUnit rule enforcing IMPLEMENTATION-SPEC.md Section 4's central rule: no class in decision-engine-core or decision-engine-domain may depend on io.quarkus/org.springframework/io.micronaut. Write this test before DroolsRuleEvaluator itself, not after (Section 11.4) - it exists specifically to fail the build immediately on a violation, not to be caught in review.</description>
 
     <dependencies>

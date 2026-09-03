@@ -31,7 +31,7 @@
     <artifactId>decision-engine-conformance-tests</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: Conformance Tests</name>
+    <name>ForwardMeasure Decision Engine :: Conformance Tests</name>
     <description>Black-box gRPC client tests run against each of the three running framework-binding containers in turn (IMPLEMENTATION-SPEC.md Section 11.3) - real Postgres, real Valkey (both embedded and external deploy shapes), real container. Do not report this project "done" without this module's evidence - mirrors the 9-way live verification performed for forwardmeasure-agent-os this same investigation cycle.</description>
 
     <dependencies>

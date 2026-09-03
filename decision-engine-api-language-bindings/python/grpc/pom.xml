@@ -31,7 +31,7 @@
     <artifactId>decision-engine-api-language-bindings-python-grpc</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: API Language Bindings :: Python :: gRPC</name>
+    <name>ForwardMeasure Decision Engine :: API Language Bindings :: Python :: gRPC</name>
     <description>Generated Python protobuf bindings using a Maven-managed protoc toolchain.</description>
 
     <properties>

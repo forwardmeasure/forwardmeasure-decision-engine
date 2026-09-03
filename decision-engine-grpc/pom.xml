@@ -31,8 +31,8 @@
     <artifactId>decision-engine-grpc</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: gRPC</name>
-    <description>Framework-neutral EvaluationServiceImpl / ManagementServiceImpl (IMPLEMENTATION-SPEC.md Section 8.1) - hosted identically by all three framework bindings. No @GrpcService, no Spring @Bean, no Micronaut @Singleton anywhere in this module - those belong exclusively in framework-bindings/*. Protocol-specific by nature (implements the grpc-generated *ImplBase classes) - a future Thrift interface would need its own analogous module alongside this one, sharing decision-engine-core/decision-engine-domain, not a change to this module.</description>
+    <name>ForwardMeasure Decision Engine :: gRPC</name>
+    <description>Framework-neutral EvaluationServiceImpl / ManagementServiceImpl (IMPLEMENTATION-SPEC.md Section 8.1) - hosted identically by all three framework bindings. No @GrpcService, no Spring @Bean, no Micronaut @Singleton anywhere in this module - those belong exclusively in decision-engine-framework-bindings/*. Protocol-specific by nature (implements the grpc-generated *ImplBase classes) - a future Thrift interface would need its own analogous module alongside this one, sharing decision-engine-core/decision-engine-domain, not a change to this module.</description>
 
     <dependencies>
         <dependency>

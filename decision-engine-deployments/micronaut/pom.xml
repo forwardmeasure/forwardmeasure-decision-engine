@@ -31,7 +31,7 @@
     <artifactId>decision-engine-micronaut</artifactId>
     <packaging>jar</packaging>
 
-    <name>Decision Engine :: Micronaut</name>
+    <name>ForwardMeasure Decision Engine :: Micronaut</name>
     <description>Micronaut gRPC + persistence wiring only - IMPLEMENTATION-SPEC.md Section 8.4. The shared EvaluationServiceImpl/ManagementServiceImpl from decision-engine-grpc need a thin annotated subclass here for Micronaut's compile-time DI to discover them - same pattern as MicronautPolicyEvaluationsResource extends PolicyEvaluationsResource in forwardmeasure-agent-os. MicronautTransactionalServiceProxy-style wrapping applies to the JPA-backed RulesetVersionService only, never to ValkeyFactWindowStore (no transactional concerns there).</description>
 
     <properties>
