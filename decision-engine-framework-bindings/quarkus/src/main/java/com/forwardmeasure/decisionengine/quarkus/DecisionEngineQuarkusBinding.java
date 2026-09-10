@@ -9,19 +9,27 @@ package com.forwardmeasure.decisionengine.quarkus;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.forwardmeasure.decisionengine.contract.v1.ActivateRulesetVersionRequest;
+import com.forwardmeasure.decisionengine.contract.v1.CacheStatus;
+import com.forwardmeasure.decisionengine.contract.v1.ClearCompiledRulesCacheRequest;
 import com.forwardmeasure.decisionengine.contract.v1.CreateRulesetVersionRequest;
 import com.forwardmeasure.decisionengine.contract.v1.DeleteRulesetVersionRequest;
 import com.forwardmeasure.decisionengine.contract.v1.DeleteRulesetVersionResponse;
 import com.forwardmeasure.decisionengine.contract.v1.EvaluationRequest;
 import com.forwardmeasure.decisionengine.contract.v1.EvaluationResponse;
 import com.forwardmeasure.decisionengine.contract.v1.GetActiveRulesetVersionRequest;
+import com.forwardmeasure.decisionengine.contract.v1.GetCacheStatusRequest;
+import com.forwardmeasure.decisionengine.contract.v1.GetStatisticsRequest;
 import com.forwardmeasure.decisionengine.contract.v1.ListRulesetVersionsRequest;
 import com.forwardmeasure.decisionengine.contract.v1.ListRulesetVersionsResponse;
+import com.forwardmeasure.decisionengine.contract.v1.RuntimeStatistics;
+import com.forwardmeasure.decisionengine.contract.v1.UnloadRulesetRequest;
+import com.forwardmeasure.decisionengine.contract.v1.WarmRulesetRequest;
 import com.forwardmeasure.decisionengine.core.DrlCompiler;
 import com.forwardmeasure.decisionengine.core.DroolsRuleEvaluator;
 import com.forwardmeasure.decisionengine.domain.RuleEvaluator;
 import com.forwardmeasure.decisionengine.domain.RulesetSource;
 import com.forwardmeasure.decisionengine.factwindow.ValkeyFactWindowStore;
+import com.forwardmeasure.decisionengine.grpc.AdminServiceImpl;
 import com.forwardmeasure.decisionengine.grpc.EvaluationServiceImpl;
 import com.forwardmeasure.decisionengine.grpc.ManagementServiceImpl;
 import com.forwardmeasure.decisionengine.jpa.application.RulesetVersionService;
@@ -72,8 +80,51 @@ public class DecisionEngineQuarkusBinding {
 
   @Produces
   @ApplicationScoped
-  RuleEvaluator evaluator(RulesetSource source, ValkeyFactWindowStore store) {
+  DroolsRuleEvaluator evaluator(RulesetSource source, ValkeyFactWindowStore store) {
     return new DroolsRuleEvaluator(source, store);
+  }
+
+  @GrpcService
+  @Blocking
+  @Singleton
+  public static final class AdminService extends AdminServiceImpl {
+    @jakarta.inject.Inject
+    public AdminService(DroolsRuleEvaluator evaluator) {
+      super(evaluator);
+    }
+
+    @Override
+    @Blocking
+    public void getStatistics(
+        GetStatisticsRequest request, StreamObserver<RuntimeStatistics> observer) {
+      super.getStatistics(request, observer);
+    }
+
+    @Override
+    @Blocking
+    public void getCacheStatus(
+        GetCacheStatusRequest request, StreamObserver<CacheStatus> observer) {
+      super.getCacheStatus(request, observer);
+    }
+
+    @Override
+    @Blocking
+    public void unloadRuleset(UnloadRulesetRequest request, StreamObserver<CacheStatus> observer) {
+      super.unloadRuleset(request, observer);
+    }
+
+    @Override
+    @Blocking
+    public void clearCompiledRulesCache(
+        ClearCompiledRulesCacheRequest request, StreamObserver<CacheStatus> observer) {
+      super.clearCompiledRulesCache(request, observer);
+    }
+
+    @Override
+    @Blocking
+    public void warmRuleset(WarmRulesetRequest request, StreamObserver<CacheStatus> observer) {
+      super.warmRuleset(request, observer);
+    }
   }
 
   @GrpcService

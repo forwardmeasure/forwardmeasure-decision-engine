@@ -1,0 +1,20 @@
+{
+  "ruleset": "golden/customerSegmentation",
+  "mode": "STATELESS",
+  "cases": [
+    {
+      "name": "business customer is classified",
+      "input": {"segment": "business", "country": "US"},
+      "outcome": "business",
+      "firedRules": ["business-customer"],
+      "factsConsidered": 1
+    },
+    {
+      "name": "consumer customer is classified",
+      "input": {"segment": "consumer", "country": "CA"},
+      "outcome": "consumer",
+      "firedRules": ["consumer-customer"],
+      "factsConsidered": 1
+    }
+  ]
+}

@@ -12,6 +12,7 @@ import com.forwardmeasure.decisionengine.core.DroolsRuleEvaluator;
 import com.forwardmeasure.decisionengine.domain.RuleEvaluator;
 import com.forwardmeasure.decisionengine.domain.RulesetSource;
 import com.forwardmeasure.decisionengine.factwindow.ValkeyFactWindowStore;
+import com.forwardmeasure.decisionengine.grpc.AdminServiceImpl;
 import com.forwardmeasure.decisionengine.grpc.EvaluationServiceImpl;
 import com.forwardmeasure.decisionengine.grpc.ManagementServiceImpl;
 import com.forwardmeasure.decisionengine.jpa.application.RulesetVersionService;
@@ -83,7 +84,7 @@ public class DecisionEngineMicronautBinding {
   }
 
   @Singleton
-  RuleEvaluator evaluator(RulesetSource source, ValkeyFactWindowStore store) {
+  DroolsRuleEvaluator evaluator(RulesetSource source, ValkeyFactWindowStore store) {
     return new DroolsRuleEvaluator(source, store);
   }
 
@@ -100,6 +101,14 @@ public class DecisionEngineMicronautBinding {
     @Inject
     public MicronautManagementService(RulesetVersionService service) {
       super(service);
+    }
+  }
+
+  @Singleton
+  public static final class MicronautAdminService extends AdminServiceImpl {
+    @Inject
+    public MicronautAdminService(DroolsRuleEvaluator evaluator) {
+      super(evaluator);
     }
   }
 }

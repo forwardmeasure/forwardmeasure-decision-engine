@@ -39,6 +39,10 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>decision-engine-database-migrations</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

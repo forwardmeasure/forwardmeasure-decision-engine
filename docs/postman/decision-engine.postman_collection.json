@@ -1,0 +1,178 @@
+{
+  "info": {
+    "name": "ForwardMeasure Decision Engine gRPC",
+    "description": "Manual gRPC requests for ruleset management and evaluation. Import the protobuf service definitions from decision-engine-api-specifications before invoking requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "grpc_host", "value": "localhost:19000"},
+    {"key": "ruleset", "value": "golden/paymentsRisk"},
+    {"key": "ruleset_version", "value": "1"},
+    {"key": "session_key", "value": "postman-session-1"}
+  ],
+  "item": [
+    {
+      "name": "Ruleset management",
+      "item": [
+        {
+          "name": "Create and activate payments-risk ruleset",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ruleset\": \"golden/paymentsRisk\",\n  \"drl\": \"package golden.payments; global java.util.Map result; rule \\\"high-risk-payment\\\" when Map(this[\\\"risk\\\"] == \\\"high\\\") then result.put(\\\"outcome\\\", \\\"manual_review\\\"); end\",\n  \"mode\": \"STATELESS\",\n  \"activate\": true,\n  \"created_by\": \"postman\"\n}"
+            },
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.RulesetManagementService/CreateRulesetVersion",
+              "body": "{\n  \"ruleset\": \"golden/paymentsRisk\",\n  \"drl\": \"package golden.payments; global java.util.Map result; rule \\\"high-risk-payment\\\" when Map(this[\\\"risk\\\"] == \\\"high\\\") then result.put(\\\"outcome\\\", \\\"manual_review\\\"); end\",\n  \"mode\": \"STATELESS\",\n  \"activate\": true,\n  \"created_by\": \"postman\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get active ruleset version",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.RulesetManagementService/GetActiveRulesetVersion",
+              "body": "{\n  \"ruleset\": \"{{ruleset}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List ruleset versions",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.RulesetManagementService/ListRulesetVersions",
+              "body": "{\n  \"ruleset\": \"{{ruleset}}\",\n  \"limit\": 100\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Evaluation",
+      "item": [
+        {
+          "name": "Evaluate active payments-risk ruleset",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.EvaluationService/Evaluate",
+              "body": "{\n  \"ruleset\": \"{{ruleset}}\",\n  \"input\": {\n    \"risk\": \"high\",\n    \"amount\": 12500\n  },\n  \"correlation_id\": \"postman-active\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Evaluate pinned ruleset version",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.EvaluationService/Evaluate",
+              "body": "{\n  \"ruleset\": \"{{ruleset}}\",\n  \"input\": {\n    \"risk\": \"low\",\n    \"amount\": 125\n  },\n  \"ruleset_version\": {{ruleset_version}},\n  \"correlation_id\": \"postman-pinned\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Evaluate stateful transaction velocity",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.EvaluationService/Evaluate",
+              "body": "{\n  \"ruleset\": \"golden/transactionVelocity\",\n  \"input\": {\n    \"transaction_id\": \"postman-t1\",\n    \"amount\": 100\n  },\n  \"session_key\": \"{{session_key}}\",\n  \"correlation_id\": \"postman-stateful\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Invalid ruleset name (expected INVALID_ARGUMENT)",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.EvaluationService/Evaluate",
+              "body": "{\n  \"ruleset\": \"Bad Name\",\n  \"input\": {}\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Local administration",
+      "item": [
+        {
+          "name": "Get runtime statistics",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.DecisionEngineAdminService/GetStatistics",
+              "body": "{}"
+            }
+          }
+        },
+        {
+          "name": "Get compiled-rules cache status",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.DecisionEngineAdminService/GetCacheStatus",
+              "body": "{}"
+            }
+          }
+        },
+        {
+          "name": "Warm ruleset version",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.DecisionEngineAdminService/WarmRuleset",
+              "body": "{\n  \"ruleset\": \"{{ruleset}}\",\n  \"version\": {{ruleset_version}}\n}"
+            }
+          }
+        },
+        {
+          "name": "Unload ruleset version",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.DecisionEngineAdminService/UnloadRuleset",
+              "body": "{\n  \"ruleset\": \"{{ruleset}}\",\n  \"version\": {{ruleset_version}}\n}"
+            }
+          }
+        },
+        {
+          "name": "Clear compiled-rules cache",
+          "request": {
+            "url": "{{grpc_host}}",
+            "method": "POST",
+            "header": [],
+            "grpc": {
+              "method": "forwardmeasure.decisionengine.v1.DecisionEngineAdminService/ClearCompiledRulesCache",
+              "body": "{}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

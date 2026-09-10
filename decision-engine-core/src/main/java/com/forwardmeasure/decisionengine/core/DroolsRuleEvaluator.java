@@ -21,13 +21,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.LongAdder;
 import org.kie.api.event.rule.AfterMatchFiredEvent;
 import org.kie.api.event.rule.DefaultAgendaEventListener;
 import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
 
 /** Framework-neutral Drools evaluator. */
-public final class DroolsRuleEvaluator implements RuleEvaluator {
+public final class DroolsRuleEvaluator implements RuleEvaluator, RuleEngineAdmin {
 
   public static final int DEFAULT_CACHE_CAPACITY = 100;
 
@@ -38,6 +39,14 @@ public final class DroolsRuleEvaluator implements RuleEvaluator {
   private final DrlCompiler compiler;
   private final int cacheCapacity;
   private final Map<CacheKey, KieContainer> containers;
+  private final LongAdder invocationCount = new LongAdder();
+  private final LongAdder successCount = new LongAdder();
+  private final LongAdder failureCount = new LongAdder();
+  private final LongAdder cacheHitCount = new LongAdder();
+  private final LongAdder cacheMissCount = new LongAdder();
+  private final LongAdder cacheEvictionCount = new LongAdder();
+  private final LongAdder totalEvaluationNanos = new LongAdder();
+  private final LongAdder totalCompilationNanos = new LongAdder();
 
   public DroolsRuleEvaluator(RulesetSource rulesetSource, FactWindowStore factWindowStore) {
     this(rulesetSource, factWindowStore, new DrlCompiler(), DEFAULT_CACHE_CAPACITY);
@@ -65,6 +74,19 @@ public final class DroolsRuleEvaluator implements RuleEvaluator {
 
   @Override
   public EvaluationOutcome evaluate(EvaluationInput input) {
+    long started = System.nanoTime();
+    invocationCount.increment();
+    try {
+      return evaluateInternal(input);
+    } catch (RuntimeException exception) {
+      failureCount.increment();
+      throw exception;
+    } finally {
+      totalEvaluationNanos.add(System.nanoTime() - started);
+    }
+  }
+
+  private EvaluationOutcome evaluateInternal(EvaluationInput input) {
     Objects.requireNonNull(input, "input");
     RulesetVersion version =
         input.pinnedVersion() == null
@@ -140,8 +162,11 @@ public final class DroolsRuleEvaluator implements RuleEvaluator {
             RuleEvaluationException.Reason.MISSING_OUTCOME,
             "rules did not produce a non-null outcome");
       }
-      return new EvaluationOutcome(
-          Map.copyOf(result), List.copyOf(firedRules), version.version(), facts.size());
+      EvaluationOutcome outcome =
+          new EvaluationOutcome(
+              Map.copyOf(result), List.copyOf(firedRules), version.version(), facts.size());
+      successCount.increment();
+      return outcome;
     } catch (RuleEvaluationException exception) {
       throw exception;
     } catch (RuntimeException exception) {
@@ -163,15 +188,65 @@ public final class DroolsRuleEvaluator implements RuleEvaluator {
     synchronized (containers) {
       KieContainer cached = containers.get(key);
       if (cached != null) {
+        cacheHitCount.increment();
         return cached;
       }
+      cacheMissCount.increment();
+      long started = System.nanoTime();
       KieContainer compiled = compiler.compile(version.ruleset(), version.version(), version.drl());
+      totalCompilationNanos.add(System.nanoTime() - started);
       containers.put(key, compiled);
       if (containers.size() > cacheCapacity) {
         containers.remove(containers.keySet().iterator().next());
+        cacheEvictionCount.increment();
       }
       return compiled;
     }
+  }
+
+  @Override
+  public RuntimeStatistics statistics() {
+    return new RuntimeStatistics(
+        invocationCount.sum(),
+        successCount.sum(),
+        failureCount.sum(),
+        cacheHitCount.sum(),
+        cacheMissCount.sum(),
+        cacheEvictionCount.sum(),
+        totalEvaluationNanos.sum(),
+        totalCompilationNanos.sum());
+  }
+
+  @Override
+  public CacheStatus cacheStatus() {
+    synchronized (containers) {
+      return new CacheStatus(
+          cacheCapacity,
+          containers.size(),
+          containers.keySet().stream()
+              .map(key -> new CacheStatus.CacheEntry(key.ruleset(), key.version()))
+              .toList());
+    }
+  }
+
+  @Override
+  public boolean unload(String ruleset, long version) {
+    synchronized (containers) {
+      return containers.remove(new CacheKey(ruleset, version)) != null;
+    }
+  }
+
+  @Override
+  public void clearCache() {
+    synchronized (containers) {
+      containers.clear();
+    }
+  }
+
+  @Override
+  public CacheStatus warm(String ruleset, long version) {
+    getOrCompile(rulesetSource.getVersion(ruleset, version));
+    return cacheStatus();
   }
 
   int cachedContainerCount() {

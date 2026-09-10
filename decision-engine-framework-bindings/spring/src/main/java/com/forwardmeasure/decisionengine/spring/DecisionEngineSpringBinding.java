@@ -9,9 +9,11 @@ package com.forwardmeasure.decisionengine.spring;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.forwardmeasure.decisionengine.core.DrlCompiler;
 import com.forwardmeasure.decisionengine.core.DroolsRuleEvaluator;
+import com.forwardmeasure.decisionengine.core.RuleEngineAdmin;
 import com.forwardmeasure.decisionengine.domain.RuleEvaluator;
 import com.forwardmeasure.decisionengine.domain.RulesetSource;
 import com.forwardmeasure.decisionengine.factwindow.ValkeyFactWindowStore;
+import com.forwardmeasure.decisionengine.grpc.AdminServiceImpl;
 import com.forwardmeasure.decisionengine.grpc.EvaluationServiceImpl;
 import com.forwardmeasure.decisionengine.grpc.ManagementServiceImpl;
 import com.forwardmeasure.decisionengine.jpa.application.RulesetVersionService;
@@ -53,7 +55,7 @@ public class DecisionEngineSpringBinding {
   }
 
   @Bean
-  RuleEvaluator evaluator(RulesetSource source, ValkeyFactWindowStore store) {
+  DroolsRuleEvaluator evaluator(RulesetSource source, ValkeyFactWindowStore store) {
     return new DroolsRuleEvaluator(source, store);
   }
 
@@ -67,5 +69,11 @@ public class DecisionEngineSpringBinding {
   @GrpcService
   ManagementServiceImpl managementService(RulesetVersionService service) {
     return new ManagementServiceImpl(service);
+  }
+
+  @Bean
+  @GrpcService
+  AdminServiceImpl adminService(RuleEngineAdmin admin) {
+    return new AdminServiceImpl(admin);
   }
 }

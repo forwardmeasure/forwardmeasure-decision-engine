@@ -1,0 +1,20 @@
+{
+  "ruleset": "golden/paymentsRisk",
+  "mode": "STATELESS",
+  "cases": [
+    {
+      "name": "high risk is sent to review",
+      "input": {"risk": "high", "amount": 12500},
+      "outcome": "manual_review",
+      "firedRules": ["high-risk-payment"],
+      "factsConsidered": 1
+    },
+    {
+      "name": "low risk is approved",
+      "input": {"risk": "low", "amount": 125},
+      "outcome": "approved",
+      "firedRules": ["low-risk-payment"],
+      "factsConsidered": 1
+    }
+  ]
+}

@@ -1145,6 +1145,22 @@ package under `io.quarkus`, `org.springframework`, or `io.micronaut`. This is th
 enforcement of Section 4's central architectural rule — write it before writing `DroolsRuleEvaluator`
 itself, not after, so a violation fails the build immediately rather than being caught in review.
 
+### 11.5 Operational administration
+`decision-engine-api-specifications` owns `admin.proto` and Maven generates the Java, Python, and
+TypeScript clients from it alongside the business contracts. `decision-engine-grpc` implements the
+generated `DecisionEngineAdminService` base class. The three framework bindings only register that
+implementation and inject `RuleEngineAdmin` from `decision-engine-core`.
+
+The administrative contract is intentionally separate from `RulesetManagementService`. Its cache
+operations are local to one serving process and never mutate PostgreSQL ruleset versions or Valkey
+fact windows. `WarmRuleset` resolves the requested immutable version through the existing
+`RulesetSource` port (and therefore the JPA service/repository path), then compiles it into the local
+cache. Deployment-level access control is required; the engine does not implement its own security
+layer.
+
+The runtime statistics are process-lifetime counters. They provide operational diagnostics, not a
+durable reporting store; production aggregation belongs to the platform metrics/tracing system.
+
 ---
 
 ## 12. Definition of done

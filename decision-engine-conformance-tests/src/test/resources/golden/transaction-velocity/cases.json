@@ -1,0 +1,27 @@
+{
+  "ruleset": "golden/transactionVelocity",
+  "mode": "STATEFUL",
+  "maxWindowSize": 10,
+  "idleTimeoutSeconds": 300,
+  "cases": [
+    {
+      "name": "first transaction does not cross threshold",
+      "input": {"transaction_id": "t1", "amount": 100},
+      "expectedStatus": "FAILED_PRECONDITION",
+      "factsConsidered": 1
+    },
+    {
+      "name": "second transaction does not cross threshold",
+      "input": {"transaction_id": "t2", "amount": 200},
+      "expectedStatus": "FAILED_PRECONDITION",
+      "factsConsidered": 2
+    },
+    {
+      "name": "third transaction raises alert",
+      "input": {"transaction_id": "t3", "amount": 300},
+      "outcome": "velocity_alert",
+      "firedRules": ["velocity-threshold-reached"],
+      "factsConsidered": 3
+    }
+  ]
+}

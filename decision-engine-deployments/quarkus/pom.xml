@@ -36,6 +36,8 @@
 
     <properties>
         <container-image.name>decision-engine-quarkus</container-image.name>
+        <!-- Quarkus 3.39 pins Netty 4.1; Lettuce 7.x requires Netty 4.2's event-loop API. -->
+        <lettuce.quarkus.version>6.5.5.RELEASE</lettuce.quarkus.version>
     </properties>
 
     <dependencyManagement>
@@ -44,6 +46,13 @@
             <groupId>com.forwardmeasure.platform</groupId>
             <artifactId>forwardmeasure-platform-quarkus-bom</artifactId>
             <version>${forwardmeasure.platform.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-bom</artifactId>
+            <version>${netty.version}</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -70,6 +79,12 @@
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>decision-engine-fact-window</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.lettuce</groupId>
+                    <artifactId>lettuce-core</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -102,6 +117,11 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-container-image-docker</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+            <version>${lettuce.quarkus.version}</version>
         </dependency>
     </dependencies>
 

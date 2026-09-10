@@ -155,6 +155,7 @@
                                 <argument>--python_out=${project.build.directory}/generated-python</argument>
                                 <argument>forwardmeasure/decisionengine/v1/evaluation.proto</argument>
                                 <argument>forwardmeasure/decisionengine/v1/ruleset_management.proto</argument>
+                                <argument>forwardmeasure/decisionengine/v1/admin.proto</argument>
                             </arguments>
                         </configuration>
                     </execution>
@@ -193,6 +194,7 @@
                                 <argument>--grpc_python_out=${project.build.directory}/generated-python</argument>
                                 <argument>forwardmeasure/decisionengine/v1/evaluation.proto</argument>
                                 <argument>forwardmeasure/decisionengine/v1/ruleset_management.proto</argument>
+                                <argument>forwardmeasure/decisionengine/v1/admin.proto</argument>
                             </arguments>
                         </configuration>
                     </execution>

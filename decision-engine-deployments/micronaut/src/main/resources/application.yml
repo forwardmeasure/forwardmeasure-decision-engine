@@ -3,6 +3,9 @@ micronaut:
     name: decision-engine
   server:
     port: 8080
+grpc:
+  server:
+    port: 9000
 datasources:
   default:
     url: ${DECISION_ENGINE_DATABASE_URL}
