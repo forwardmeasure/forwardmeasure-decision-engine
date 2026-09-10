@@ -114,6 +114,10 @@ public class RulesetVersionServiceImpl implements RulesetVersionService {
               active.setActive(false);
               repository.merge(active);
             });
+    // The database has a partial unique index allowing only one active version per ruleset.
+    // Force the deactivation to reach Postgres before marking the requested version active; a
+    // single Hibernate flush can otherwise order the two updates in the wrong direction.
+    repository.flush();
     requested.setActive(true);
     repository.merge(requested);
     repository.flush();
