@@ -11,8 +11,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.forwardmeasure.decisionengine.contract.v1.EvaluationRequest;
 import com.forwardmeasure.decisionengine.domain.RuleEvaluationException;
+import com.forwardmeasure.decisionengine.domain.RulesetSource;
+import com.forwardmeasure.decisionengine.domain.RulesetVersion;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantContext;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantExecution;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantScopedRuleEvaluators;
+import com.forwardmeasure.jpa.liquibase.TenantDatabaseResolver;
+import com.forwardmeasure.jpa.tenancy.TenantDatabase;
+import com.forwardmeasure.jpa.tenancy.TenantId;
+import com.forwardmeasure.jpa.tenancy.ThreadBoundTenantScope;
+import io.grpc.Context;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -25,31 +37,50 @@ class EvaluationServiceImplTest {
             1,
             RuleEvaluationException.Reason.MISSING_OUTCOME,
             "rules did not produce an outcome");
-    var service =
-        new EvaluationServiceImpl(
-            input -> {
-              throw failure;
-            });
-    var observed = new AtomicReference<Throwable>();
-
-    service.evaluate(
-        EvaluationRequest.newBuilder()
-            .setRuleset("golden/paymentsRisk")
-            .setInput(com.google.protobuf.Struct.getDefaultInstance())
-            .build(),
-        new StreamObserver<>() {
+    RulesetSource throwingSource =
+        new RulesetSource() {
           @Override
-          public void onNext(
-              com.forwardmeasure.decisionengine.contract.v1.EvaluationResponse value) {}
-
-          @Override
-          public void onError(Throwable throwable) {
-            observed.set(throwable);
+          public RulesetVersion getActiveVersion(String ruleset) {
+            throw failure;
           }
 
           @Override
-          public void onCompleted() {}
-        });
+          public RulesetVersion getVersion(String ruleset, long version) {
+            throw failure;
+          }
+        };
+    TenantId tenantId = new TenantId(UUID.randomUUID());
+    var service =
+        new EvaluationServiceImpl(
+            new TenantScopedRuleEvaluators(throwingSource, null),
+            new TenantExecution(
+                new ThreadBoundTenantScope(),
+                TenantDatabaseResolver.preResolved(
+                    Map.of(tenantId, TenantDatabase.forAlias("evaluationservicetest")))));
+    var observed = new AtomicReference<Throwable>();
+
+    Context.current()
+        .withValue(TenantContext.KEY, tenantId)
+        .run(
+            () ->
+                service.evaluate(
+                    EvaluationRequest.newBuilder()
+                        .setRuleset("golden/paymentsRisk")
+                        .setInput(com.google.protobuf.Struct.getDefaultInstance())
+                        .build(),
+                    new StreamObserver<>() {
+                      @Override
+                      public void onNext(
+                          com.forwardmeasure.decisionengine.contract.v1.EvaluationResponse value) {}
+
+                      @Override
+                      public void onError(Throwable throwable) {
+                        observed.set(throwable);
+                      }
+
+                      @Override
+                      public void onCompleted() {}
+                    }));
 
     assertEquals(Status.Code.FAILED_PRECONDITION, Status.fromThrowable(observed.get()).getCode());
   }

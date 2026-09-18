@@ -32,7 +32,7 @@
     <packaging>jar</packaging>
 
     <name>ForwardMeasure Decision Engine :: Database Migrations</name>
-    <description>Liquibase changelog + RulesetSchemaMigrator for ruleset DEFINITIONS only (IMPLEMENTATION-SPEC.md Section 7.3) - a direct port of forwardmeasure-agent-os's own AgentOsTenantMigrator, itself ported from openworkflow-migrations. Single-tenant (one fixed schema, not schema-per-tenant - Section 13 item 3), same two-credential model (this module's own migrator connects as the administrator credential; decision-engine-jpa's runtime services never do).</description>
+    <description>Liquibase changelog for ruleset DEFINITIONS only (IMPLEMENTATION-SPEC.md Section 7.3, being revised alongside this change). Database-per-tenant, schema-per-domain (decision_intelligence) - real provisioning goes through openworkflow-migrations' own OpenWorkflowTenantMigrator, reused as a library the same way forwardmeasure-entity-intelligence's own migration Job does (see RulesetMigrationsMain in decision-engine-deployments/database-migration-service), not a second, parallel tenant-provisioning implementation. This module owns migration content only, per forwardmeasure-database-migrations' own stated design split.</description>
 
     <dependencies>
         <dependency>
@@ -57,6 +57,25 @@
             <groupId>com.forwardmeasure.jpa</groupId>
             <artifactId>forwardmeasure-jpa-testcontainers</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- DecisionEngineTenantMigrationTest reuses OpenWorkflowTenantMigrator directly against
+                 a real testcontainer - same real provisioning path RulesetMigrationsMain drives in
+                 production, not a hand-rolled stand-in. Test-scope only here: this module's own main
+                 sources never construct it themselves (only the deployment module's Main does). -->
+            <groupId>com.forwardmeasure.openworkflow</groupId>
+            <artifactId>openworkflow-migrations</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.cassandra</groupId>
+                    <artifactId>java-driver-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.httpcomponents.client5</groupId>
+                    <artifactId>httpclient5</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.hibernate.orm</groupId>

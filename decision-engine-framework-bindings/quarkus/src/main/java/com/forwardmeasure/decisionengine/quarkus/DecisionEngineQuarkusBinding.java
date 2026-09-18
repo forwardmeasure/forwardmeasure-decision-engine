@@ -25,18 +25,25 @@ import com.forwardmeasure.decisionengine.contract.v1.RuntimeStatistics;
 import com.forwardmeasure.decisionengine.contract.v1.UnloadRulesetRequest;
 import com.forwardmeasure.decisionengine.contract.v1.WarmRulesetRequest;
 import com.forwardmeasure.decisionengine.core.DrlCompiler;
-import com.forwardmeasure.decisionengine.core.DroolsRuleEvaluator;
-import com.forwardmeasure.decisionengine.domain.RuleEvaluator;
 import com.forwardmeasure.decisionengine.domain.RulesetSource;
 import com.forwardmeasure.decisionengine.factwindow.ValkeyFactWindowStore;
 import com.forwardmeasure.decisionengine.grpc.AdminServiceImpl;
 import com.forwardmeasure.decisionengine.grpc.EvaluationServiceImpl;
 import com.forwardmeasure.decisionengine.grpc.ManagementServiceImpl;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantContextServerInterceptor;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantExecution;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantIdResolver;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantScopedRuleEvaluators;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TrustingMetadataTenantResolver;
+import com.forwardmeasure.decisionengine.grpc.tenancy.VerifiedJwtTenantResolver;
 import com.forwardmeasure.decisionengine.jpa.application.RulesetVersionService;
 import com.forwardmeasure.decisionengine.jpa.repository.RulesetVersionRepository;
 import com.forwardmeasure.decisionengine.jpa.service.JpaRulesetSource;
 import com.forwardmeasure.decisionengine.jpa.service.RulesetVersionServiceImpl;
+import com.forwardmeasure.jpa.liquibase.TenantDatabaseResolver;
+import com.forwardmeasure.jpa.tenancy.TenantScope;
 import io.grpc.stub.StreamObserver;
+import io.quarkus.grpc.GlobalInterceptor;
 import io.quarkus.grpc.GrpcService;
 import io.smallrye.common.annotation.Blocking;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -80,8 +87,67 @@ public class DecisionEngineQuarkusBinding {
 
   @Produces
   @ApplicationScoped
-  DroolsRuleEvaluator evaluator(RulesetSource source, ValkeyFactWindowStore store) {
-    return new DroolsRuleEvaluator(source, store);
+  TenantScopedRuleEvaluators evaluators(RulesetSource source, ValkeyFactWindowStore store) {
+    return new TenantScopedRuleEvaluators(source, store);
+  }
+
+  @Produces
+  @ApplicationScoped
+  TenantExecution tenantExecution(TenantScope tenantScope, TenantDatabaseResolver databases) {
+    return new TenantExecution(tenantScope, databases);
+  }
+
+  /**
+   * {@code trusting} (the default) is correct only for decision-engine's current internal-only
+   * (ClusterIP) deployment, where every caller has already resolved real tenant identity upstream
+   * through its own verified flow before calling decision-engine at all - see {@link
+   * TrustingMetadataTenantResolver}'s own javadoc. {@code verified} is for a future standalone
+   * deployment reachable outside that trust boundary - see {@link VerifiedJwtTenantResolver}. This
+   * was a deliberate, already-made decision this session, not something to second-guess here.
+   */
+  @Produces
+  @ApplicationScoped
+  TenantIdResolver tenantIdResolver(
+      @ConfigProperty(name = "decision-engine.tenant-resolution.mode", defaultValue = "trusting")
+          String mode,
+      @ConfigProperty(name = "decision-engine.tenant-resolution.jwks-uri") Optional<String> jwksUri,
+      @ConfigProperty(name = "decision-engine.tenant-resolution.issuer") Optional<String> issuer,
+      @ConfigProperty(name = "decision-engine.tenant-resolution.organization-client-id")
+          Optional<String> organizationClientId) {
+    if ("verified".equalsIgnoreCase(mode)) {
+      return new VerifiedJwtTenantResolver(
+          requireForVerifiedMode(jwksUri, "decision-engine.tenant-resolution.jwks-uri"),
+          requireForVerifiedMode(issuer, "decision-engine.tenant-resolution.issuer"),
+          requireForVerifiedMode(
+              organizationClientId, "decision-engine.tenant-resolution.organization-client-id"));
+    }
+    return new TrustingMetadataTenantResolver();
+  }
+
+  private static String requireForVerifiedMode(Optional<String> value, String propertyName) {
+    return value
+        .filter(v -> !v.isBlank())
+        .orElseThrow(
+            () ->
+                new IllegalStateException(
+                    propertyName
+                        + " is required when decision-engine.tenant-resolution.mode=verified"));
+  }
+
+  /**
+   * A {@code @Produces} factory method annotated {@code @GlobalInterceptor} does NOT reliably
+   * register with Quarkus's gRPC server (live-verified via the container conformance test: the
+   * interceptor was silently never invoked, no error, no log - a real Quarkus build-time bean-
+   * discovery gap, not a Context-propagation issue). A concrete bean class annotated directly is
+   * the pattern that actually works.
+   */
+  @Singleton
+  @GlobalInterceptor
+  public static class QuarkusTenantInterceptor extends TenantContextServerInterceptor {
+    @jakarta.inject.Inject
+    public QuarkusTenantInterceptor(TenantIdResolver resolver) {
+      super(resolver);
+    }
   }
 
   @GrpcService
@@ -89,8 +155,8 @@ public class DecisionEngineQuarkusBinding {
   @Singleton
   public static final class AdminService extends AdminServiceImpl {
     @jakarta.inject.Inject
-    public AdminService(DroolsRuleEvaluator evaluator) {
-      super(evaluator);
+    public AdminService(TenantScopedRuleEvaluators evaluators, TenantExecution tenantExecution) {
+      super(evaluators, tenantExecution);
     }
 
     @Override
@@ -132,8 +198,9 @@ public class DecisionEngineQuarkusBinding {
   @Singleton
   public static final class EvaluationService extends EvaluationServiceImpl {
     @jakarta.inject.Inject
-    public EvaluationService(RuleEvaluator evaluator) {
-      super(evaluator);
+    public EvaluationService(
+        TenantScopedRuleEvaluators evaluators, TenantExecution tenantExecution) {
+      super(evaluators, tenantExecution);
     }
 
     @Override
@@ -148,8 +215,8 @@ public class DecisionEngineQuarkusBinding {
   @Singleton
   public static final class ManagementService extends ManagementServiceImpl {
     @jakarta.inject.Inject
-    public ManagementService(RulesetVersionService service) {
-      super(service);
+    public ManagementService(RulesetVersionService service, TenantExecution tenantExecution) {
+      super(service, tenantExecution);
     }
 
     @Override

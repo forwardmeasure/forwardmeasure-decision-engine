@@ -20,6 +20,7 @@
         <dependency><groupId>${project.groupId}</groupId><artifactId>decision-engine-core</artifactId></dependency>
         <dependency><groupId>${project.groupId}</groupId><artifactId>decision-engine-jpa</artifactId></dependency>
         <dependency><groupId>${project.groupId}</groupId><artifactId>decision-engine-fact-window</artifactId></dependency>
+        <dependency><groupId>com.forwardmeasure.jpa</groupId><artifactId>forwardmeasure-jpa-quarkus</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-arc</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-grpc</artifactId></dependency>
         <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-hibernate-orm</artifactId></dependency>

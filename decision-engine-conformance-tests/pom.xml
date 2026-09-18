@@ -34,10 +34,39 @@
     <name>ForwardMeasure Decision Engine :: Conformance Tests</name>
     <description>Black-box gRPC client tests run against each of the three running framework-binding containers in turn (IMPLEMENTATION-SPEC.md Section 11.3) - real Postgres, real Valkey (both embedded and external deploy shapes), real container. Do not report this project "done" without this module's evidence - mirrors the 9-way live verification performed for forwardmeasure-agent-os this same investigation cycle.</description>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <!-- Dependency-convergence pin: decision-engine-grpc's own transitive liquibase-core
+                     needs 2.6; forwardmeasure-testcontainers-kubernetes's jackson-dataformat-yaml
+                     only needs 2.5 - pinned here so the higher of the two wins deterministically. -->
+                <groupId>org.yaml</groupId>
+                <artifactId>snakeyaml</artifactId>
+                <version>2.6</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>decision-engine-api-language-bindings-java-grpc</artifactId>
+        </dependency>
+        <dependency>
+            <!-- TrustingMetadataTenantResolver.TENANT_ID_HEADER - the exact gRPC metadata key real
+                 services read tenant identity from, reused here rather than a duplicated string
+                 literal that could silently drift from the real one. -->
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-grpc</artifactId>
+        </dependency>
+        <dependency>
+            <!-- TenantDatabase/Did/TenantId - computes each test tenant's real physical database
+                 name deterministically, the same way RulesetMigrationsMain/OpenWorkflowTenantMigrator
+                 do, so this test can connect directly (as the postgres superuser) and prove two
+                 tenants' ruleset rows live in genuinely separate physical databases - not just that
+                 the gRPC-level responses happen to differ. -->
+            <groupId>com.forwardmeasure.jpa</groupId>
+            <artifactId>forwardmeasure-jpa-tenancy</artifactId>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>

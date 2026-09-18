@@ -10,11 +10,15 @@ package com.forwardmeasure.decisionengine.grpc;
 import com.forwardmeasure.decisionengine.contract.v1.EvaluationRequest;
 import com.forwardmeasure.decisionengine.contract.v1.EvaluationResponse;
 import com.forwardmeasure.decisionengine.contract.v1.EvaluationServiceGrpc;
+import com.forwardmeasure.decisionengine.core.DroolsRuleEvaluator;
 import com.forwardmeasure.decisionengine.domain.EvaluationInput;
 import com.forwardmeasure.decisionengine.domain.EvaluationOutcome;
 import com.forwardmeasure.decisionengine.domain.RuleEvaluationException;
-import com.forwardmeasure.decisionengine.domain.RuleEvaluator;
 import com.forwardmeasure.decisionengine.domain.RulesetNotFoundException;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantContext;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantExecution;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantScopedRuleEvaluators;
+import com.forwardmeasure.jpa.tenancy.TenantId;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import java.util.regex.Pattern;
@@ -23,10 +27,13 @@ import org.slf4j.MDC;
 public class EvaluationServiceImpl extends EvaluationServiceGrpc.EvaluationServiceImplBase {
   private static final Pattern RULESET_PATTERN =
       Pattern.compile("^[a-z][a-zA-Z0-9]*(/[a-z][a-zA-Z0-9]*)*$");
-  private final RuleEvaluator evaluator;
+  private final TenantScopedRuleEvaluators evaluators;
+  private final TenantExecution tenantExecution;
 
-  public EvaluationServiceImpl(RuleEvaluator evaluator) {
-    this.evaluator = evaluator;
+  public EvaluationServiceImpl(
+      TenantScopedRuleEvaluators evaluators, TenantExecution tenantExecution) {
+    this.evaluators = evaluators;
+    this.tenantExecution = tenantExecution;
   }
 
   @Override
@@ -42,13 +49,18 @@ public class EvaluationServiceImpl extends EvaluationServiceGrpc.EvaluationServi
       if (!RULESET_PATTERN.matcher(request.getRuleset()).matches()) {
         throw Status.INVALID_ARGUMENT.withDescription("invalid ruleset name").asRuntimeException();
       }
+      TenantId tenantId = TenantContext.required();
+      DroolsRuleEvaluator evaluator = evaluators.forTenant(tenantId);
       EvaluationOutcome outcome =
-          evaluator.evaluate(
-              new EvaluationInput(
-                  request.getRuleset(),
-                  request.hasRulesetVersion() ? request.getRulesetVersion() : null,
-                  ProtoStructMapper.toMap(request.getInput()),
-                  request.getSessionKey()));
+          tenantExecution.call(
+              tenantId,
+              () ->
+                  evaluator.evaluate(
+                      new EvaluationInput(
+                          request.getRuleset(),
+                          request.hasRulesetVersion() ? request.getRulesetVersion() : null,
+                          ProtoStructMapper.toMap(request.getInput()),
+                          request.getSessionKey())));
       com.google.protobuf.Struct result;
       try {
         result = ProtoStructMapper.toStruct(outcome.result());

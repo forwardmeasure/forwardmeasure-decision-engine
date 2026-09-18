@@ -32,12 +32,30 @@
     <packaging>jar</packaging>
 
     <name>ForwardMeasure Decision Engine :: Database Migration Service</name>
-    <description>Bounded Kubernetes migration-job entry point (RulesetMigrationsMain) - a direct port of forwardmeasure-agent-os's own AgentOsMigrationsMain. Reads DECISION_ENGINE_DATABASE_URL/_USERNAME/_PASSWORD (administrator credential here; the SAME env var names mean the runtime credential in the running server - see IMPLEMENTATION-SPEC.md Section 7.3) plus DECISION_ENGINE_RUNTIME_DATABASE_USERNAME/_PASSWORD for the role this job provisions.</description>
+    <description>Bounded Kubernetes migration-job entry point (RulesetMigrationsMain) - database-per-tenant, schema-per-domain, reusing openworkflow-migrations' own OpenWorkflowTenantMigrator as a library the same way forwardmeasure-entity-intelligence's own migration Job does. Reads DECISION_ENGINE_DATABASE_URL/_USERNAME/_PASSWORD (administrator credential, connects to the platform's own control-plane database - never a tenant's own) plus DECISION_ENGINE_RUNTIME_DATABASE_USERNAME/_PASSWORD for the role this job provisions, plus DECISION_ENGINE_TENANTS/_TENANT_DOMAIN for the tenants to provision (alias:display-name CSV + shared domain, matching openworkflow-migrations'/entity-intelligence-migrations' own contract exactly).</description>
 
     <dependencies>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>decision-engine-database-migrations</artifactId>
+        </dependency>
+        <dependency>
+            <!-- RulesetMigrationsMain (src/main/java) reuses OpenWorkflowTenantMigrator/
+                 TenantDataSourceRegistry directly as its real per-tenant-database provisioning
+                 path - compile scope, not test-only, matching fei's own EntityIntelligenceMigrationsMain
+                 dependency exactly (see forwardmeasure-entity-intelligence-migrations/pom.xml). -->
+            <groupId>com.forwardmeasure.openworkflow</groupId>
+            <artifactId>openworkflow-migrations</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.cassandra</groupId>
+                    <artifactId>java-driver-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.httpcomponents.client5</groupId>
+                    <artifactId>httpclient5</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -70,6 +88,18 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.forwardmeasure.decisionengine.migration.service.RulesetMigrationsMain</mainClass>
                                 </transformer>
+                                <!-- Real, live-verified bug (found via the container conformance test):
+                                     openworkflow-migrations' own liquibase-cassandra dependency bundles
+                                     cassandra-jdbc-wrapper, which declares its own
+                                     META-INF/services/java.sql.Driver at the SAME path as
+                                     org.postgresql:postgresql's - shade's default "last one wins"
+                                     merge silently dropped the Postgres driver's own registration,
+                                     so DriverManager never saw org.postgresql.Driver at runtime
+                                     ("No suitable driver found"), even though the class was on the
+                                     classpath. This transformer merges (concatenates) every jar's own
+                                     META-INF/services/* file for a given service name instead of
+                                     overwriting - the standard fix for shaded JDBC drivers. -->
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                         </configuration>
                     </execution>

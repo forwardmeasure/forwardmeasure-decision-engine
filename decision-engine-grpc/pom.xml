@@ -41,11 +41,41 @@
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
             <artifactId>decision-engine-jpa</artifactId>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>decision-engine-api-language-bindings-java-grpc</artifactId>
+        </dependency>
+        <dependency>
+            <!-- TenantId/TenantSchema/TenantScope for the tenant-resolution interceptor package -
+                 previously only transitive via decision-engine-jpa. -->
+            <groupId>com.forwardmeasure.jpa</groupId>
+            <artifactId>forwardmeasure-jpa-tenancy</artifactId>
+        </dependency>
+        <dependency>
+            <!-- VerifiedJwtTenantResolver's own claims->tenant extraction - KeycloakOrganizationClaims
+                 is framework-neutral (takes a plain parsed claims Map, not a framework-specific
+                 Authentication/JsonWebToken type), matching this module's own no-framework-deps rule. -->
+            <groupId>com.forwardmeasure.authzen</groupId>
+            <artifactId>forwardmeasure-authzen-api</artifactId>
+        </dependency>
+        <dependency>
+            <!-- VerifiedJwtTenantResolver's own raw JWT signature verification (JWKS fetch + RS256
+                 check) - gRPC has no built-in JWT-verifying filter chain the way JAX-RS/Micronaut
+                 Security/Spring Security do on the HTTP side (confirmed: nothing framework-agnostic
+                 for this exists anywhere in forwardmeasure-authzen), so this module does it directly.
+                 Not managed by any BOM in this workspace as of this addition - pinned to the version
+                 already resolvable in this workspace's own .m2 (pulled transitively by Quarkus
+                 OIDC/Spring Security elsewhere), the same standard library Spring Security's own
+                 NimbusJwtDecoder uses internally. -->
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+            <version>10.9.1</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
@@ -71,6 +101,14 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- VerifiedJwtTenantResolverTest's real Keycloak fixture: real Organizations-shaped
+                 JWTs, the same real Admin REST provisioning sequence fowf/fei's own tests already
+                 rely on, generalized so this module doesn't need its own product-specific copy. -->
+            <groupId>com.forwardmeasure.authzen</groupId>
+            <artifactId>forwardmeasure-authzen-testkit</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

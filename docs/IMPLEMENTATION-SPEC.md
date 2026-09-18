@@ -594,16 +594,28 @@ project should be a direct port of the *agent-os* version, one level further dow
 not a fresh design:
 
 - Two-credential model: a bounded migration Job connects as an **administrator** credential
-  (creates the schema, runs Liquibase, creates/rotates a scoped **runtime** role via `GRANT` +
-  `ALTER DEFAULT PRIVILEGES`); the running server connects only as the runtime role, never the
-  administrator credential. Same environment variable naming convention agent-os uses:
-  `DECISION_ENGINE_DATABASE_URL` / `_USERNAME` / `_PASSWORD` mean the runtime credential in the
-  server, the administrator credential in the migration job.
-- `RulesetSchemaMigrator` (mirroring `AgentOsTenantMigrator`): `ensureRuntimeRole(password)`,
-  `provisionAndMigrate(...)`. **Single-tenant by default** — this project is not a multi-tenant
-  SaaS product, it's an internal engine (see Section 13: no tenant model). Provision one fixed
-  schema, not a schema-per-tenant scheme.
-- `RulesetMigrationsMain`: bounded Job entry point, same shape as `AgentOsMigrationsMain`.
+  (creates each tenant's own database, runs Liquibase, creates/rotates a scoped **runtime** role
+  via `GRANT` + `ALTER DEFAULT PRIVILEGES`); the running server connects only as the runtime role,
+  never the administrator credential. Same environment variable naming convention agent-os uses:
+  `DECISION_ENGINE_DATABASE_URL` / `_USERNAME` / `_PASSWORD` mean the platform control-plane
+  credential in the migration job (never a tenant's own database), the runtime credential in the
+  server.
+- **Database-per-tenant, schema-per-domain (revised - see Section 13 item 3)**: decision-engine
+  reuses `openworkflow-migrations`' own `OpenWorkflowTenantMigrator` as a library, exactly the way
+  `forwardmeasure-entity-intelligence`'s own migration Job does, rather than a second, parallel
+  tenant-provisioning implementation (`RulesetSchemaMigrator`, the old single-schema wrapper, is
+  gone). `RulesetMigrationsMain` (`decision-engine-deployments/database-migration-service`) reads
+  `DECISION_ENGINE_TENANTS` (comma-separated `alias:display-name` pairs) and
+  `DECISION_ENGINE_TENANT_DOMAIN`, derives each tenant's `TenantId`/`TenantDatabase` deterministically
+  from `did:web:<alias>.<domain>` (never supplied as a separate raw value, so they can never drift
+  apart), and calls `migrator.provisionAndMigrate(database)` per tenant - creating that tenant's own
+  Postgres database if absent, then the `decision_intelligence` functional schema
+  (`FunctionalSchema.DECISION_INTELLIGENCE`) inside it, then migrating `decision-engine-master.xml`
+  into that schema. `DecisionEngineMigrations.CHANGELOG` names the changelog resource; it no longer
+  owns provisioning logic itself.
+- The running server resolves which tenant database to connect to **per gRPC call**, not once at
+  startup - see Section 8.1's tenant-context interceptor and Section 7.3's own runtime connection
+  wiring below.
 
 **Entity** (Lombok is appropriate here):
 
@@ -706,6 +718,23 @@ version succeeds).
 Must include: concurrent `activate` calls for the same ruleset never leave two actives (assert via
 the unique index, not just application-level timing); `delete` of the active version throws;
 `create` with malformed `result` global declaration is rejected before any row exists.
+
+**Runtime tenant-connection wiring (revised alongside Section 13 item 3)**: each framework binding's
+Hibernate bootstrap is real multi-tenant, mirroring `forwardmeasure-jpa-{micronaut,quarkus,spring}`'s
+own already-proven `MultiTenantConnectionProvider`/`CurrentTenantIdentifierResolver` wiring (the same
+pattern fowf/fei already use) - not a decision-engine-specific mechanism. `TenantDataSourceRegistry`
+(a bounded, idle-evicting per-tenant HikariCP `DataSource` cache, keyed by `TenantDatabase`) resolves
+each tenant's own physical database; `FunctionalSchema.DECISION_INTELLIGENCE` is the fixed schema
+name inside it, configured once (`forwardmeasure.jpa.functional-schema`), never resolved per request.
+`TenantScope` (framework-neutral, `forwardmeasure-jpa-tenancy`) is opened synchronously around each
+unit of tenant-scoped JPA work via `decision-engine-grpc`'s own `TenantExecution` helper - never held
+open across a thread hop, since it is `ThreadLocal`-backed. Which tenant a call belongs to is resolved
+once per RPC by a global `io.grpc.ServerInterceptor` (`TenantContextServerInterceptor`, `decision-
+engine-grpc`'s `tenancy` package) and carried via `io.grpc.Context` (not a raw `ThreadLocal`, since
+gRPC dispatch - e.g. Quarkus's `@Blocking` - may hop the actual service method onto a different
+thread than the interceptor ran on); `TenantExecution` reads it back out and opens the real,
+thread-bound `TenantScope` only once execution has settled onto its final thread. See Section 13
+item 3 for how a call's tenant is actually determined and Section 8.1 for the interceptor itself.
 
 ### 7.4 `decision-engine-fact-window` — stateful-ruleset fact **history** (Valkey, not Postgres)
 
@@ -888,6 +917,21 @@ public class EvaluationServiceImpl extends EvaluationServiceGrpc.EvaluationServi
 `RulesetVersionService` — same error-mapping discipline applies: a DRL compile failure or a
 malformed/missing `result` global declaration on `CreateRulesetVersion` maps to `INVALID_ARGUMENT`,
 a `delete` of the active version maps to `FAILED_PRECONDITION`, not `INTERNAL`.)
+
+**Revised alongside Section 13 item 3 - tenant context.** The sketch above predates real
+multi-tenancy and is illustrative of the error-mapping shape, not the exact current constructor:
+`EvaluationServiceImpl`/`AdminServiceImpl` now take `(TenantScopedRuleEvaluators, TenantExecution)`
+and `ManagementServiceImpl` takes `(RulesetVersionService, TenantExecution)` — still framework-
+annotation-free, still constructor-injected, per this section's own rule. A new `tenancy`
+subpackage of this module owns tenant resolution end to end: `TenantContextServerInterceptor` (a
+global `io.grpc.ServerInterceptor`, one per deployment, wired per framework in Section 8.2-8.4)
+resolves the calling tenant via a configured `TenantIdResolver` (Section 13 item 3) and attaches it
+to `io.grpc.Context` before any service method runs; each service method reads it back via
+`TenantContext.required()` and performs its real JPA/evaluator work inside
+`TenantExecution.call(...)`, which opens the actual (thread-bound) `TenantScope` synchronously on
+whatever thread the framework ultimately dispatches to — see Section 7.3's own runtime-wiring note
+for why this two-step (`Context` then `TenantScope`) shape is necessary rather than opening
+`TenantScope` directly in the interceptor.
 
 `mapRuleEvaluationFailure` switches on `RuleEvaluationException.Reason` (Section 7.2) — a plain,
 exhaustive switch, not string-matching `getMessage()`:
@@ -1202,9 +1246,28 @@ it out — flagging in case this was wrong` comment instead.
    path: `decision-engine-core`'s plain `kie-api` usage. This is the entire point of this
    architecture — verify it against Section 11.4 before considering any milestone done.
 2. **No REST/JAX-RS surface anywhere.** gRPC only, both services (Section 5).
-3. **No multi-tenancy.** One schema, one runtime role, no `TenantScope`, no per-tenant anything.
-   Ruleset names may encode a tenant/domain prefix as a caller convention if a caller wants that
-   (exactly as OPA's `policyPath` allows today), but this project itself has no concept of a tenant.
+3. **Revised (was "No multi-tenancy") - real multi-tenancy, database-per-tenant, schema-per-domain.**
+   Decided explicitly when the whole platform moved to this model (one Postgres database per tenant,
+   one schema per functional product domain - `decision_intelligence` here, `openworkflow`/
+   `entity_intelligence` for the sibling products sharing the same tenant database). Every gRPC call
+   is resolved to exactly one tenant by a global interceptor (`TenantContextServerInterceptor`,
+   Section 8.1) before any service method runs; JPA access routes to that tenant's own database via
+   `TenantDataSourceRegistry`/`TenantScope` (Section 7.3's own runtime-wiring note), never a shared
+   schema-per-tenant scheme. Ruleset **names** are still not tenant-namespaced themselves (a
+   `policyPath`-style caller convention remains fine, unchanged) - isolation is physical (separate
+   databases), not a `tenant_id` filter column; `ruleset_version`'s own uniqueness stays scoped to
+   `(ruleset, ruleset_version)` within one tenant's own database, not globally.
+   - How a call's tenant is determined is itself configurable, not fixed - two real resolvers exist
+     (`TenantIdResolver` implementations in `decision-engine-grpc`'s `tenancy` package), selected per
+     deployment: `TrustingMetadataTenantResolver` (default - trusts a plain, unauthenticated
+     `tenant-id` gRPC metadata field, correct only when decision-engine's real trust boundary is
+     "which pods can reach this port," i.e. today's internal-only ClusterIP deployment, and the
+     caller - `forwardmeasure-agent-os` today - already resolved real tenant identity upstream
+     through its own verified flow before calling decision-engine at all) and
+     `VerifiedJwtTenantResolver` (verifies a Keycloak-issued JWT via its JWKS endpoint and extracts
+     the tenant from its organization claim - for a standalone deployment reachable by callers
+     outside a boundary decision-engine controls itself). See item 8 below for why this doesn't
+     reopen item 8's own "no auth layer" decision for the current deployment.
 4. **No maker-checker / approval workflow for ruleset versions.** Create → optionally activate →
    list → get-active → delete. That is the whole lifecycle. No draft/review/approved states.
 5. The compiled-rules cache in `decision-engine-core`, keyed by `(ruleset, version)`, MUST remain
@@ -1214,6 +1277,15 @@ it out — flagging in case this was wrong` comment instead.
    immutable and remain available from `RulesetSource`, so a later evaluation may recompile an
    evicted version. Do not replace this with a distributed cache or confuse it with the fact window
    (Section 7.4), which gets its eviction from Valkey's native TTL/`LTRIM`.
+   - **`DroolsRuleEvaluator` itself stays tenant-oblivious - do not add a tenant field to its cache
+     key.** Since item 3's revision, `decision-engine-grpc`'s `TenantScopedRuleEvaluators` gives each
+     tenant its own `DroolsRuleEvaluator` instance (lazily created, cached by `TenantId`) instead -
+     the same "one per-tenant resource, centrally cached" shape `TenantDataSourceRegistry` already
+     uses. This is deliberate, not incidental: a single shared evaluator's cache is keyed only by
+     `(ruleset, version)`, and ruleset names have never been required to be globally unique - two
+     tenants whose ruleset happens to share a name would otherwise silently serve each other's
+     compiled rules on a cache hit. `RuleEngineAdmin`'s `warm`/`unload`/`cacheStatus` operations
+     (Section 11.5) act on the calling tenant's own evaluator only.
 6. **No sticky/session-affine gRPC routing.** The fact window (Section 7.4) exists specifically so
    this is never needed. If you find yourself reaching for consistent-hash load balancing or
    session-affinity configuration to make statefulness work, that means Section 7.4 was not
@@ -1222,11 +1294,20 @@ it out — flagging in case this was wrong` comment instead.
    knowledge that `forwardmeasure-agent-os` or OPA exist. The `policyPath`-style naming convention
    and `session_key` concept are deliberate parallels for human comparability between the two
    engines, not dependencies.
-8. **No authentication/authorization layer of its own.** This is an internal engine, reached only
-   from inside the cluster, the same trust model already established for the OPA deployment in this
-   ecosystem (no mTLS, no per-caller auth token, reachable only via ClusterIP). If that trust model
-   is wrong for this project specifically, that is a decision to surface explicitly, not to route
-   around by quietly adding a custom auth layer.
+8. **Resolved (was "No authentication/authorization layer of its own") - surfaced explicitly, as
+   this item itself asked for, not routed around silently.** The trust model for the *current*
+   deployment is unchanged: internal engine, reached only from inside the cluster (ClusterIP-only,
+   no mTLS, no per-caller auth token) - `TrustingMetadataTenantResolver` (item 3) adds tenant
+   *routing* metadata to that same trust boundary, not a new authentication layer; a caller inside
+   the cluster could already reach this service and could already ask for any ruleset name, so a
+   plain tenant-id field carries no new authority beyond what the network boundary already grants.
+   The genuinely new piece - `VerifiedJwtTenantResolver`, real Keycloak JWT verification - exists
+   only for a *standalone* deployment mode, reachable by callers outside a boundary decision-engine
+   controls itself, and is not wired on by default. Do not enable `VerifiedJwtTenantResolver` (or
+   build any further authorization layer beyond tenant routing - e.g. per-caller RBAC on which
+   rulesets a token may touch) without a fresh, equally explicit decision at the point a standalone
+   deployment actually happens - this item's resolution covers tenant *identification*, not general
+   authorization.
 9. The chart is published through the shared `helm-charts` publication workflow and consumed by
    platform deployments as a versioned chart artifact. The product Helmfile may use the sibling
    chart source checkout for local development (Section 9).

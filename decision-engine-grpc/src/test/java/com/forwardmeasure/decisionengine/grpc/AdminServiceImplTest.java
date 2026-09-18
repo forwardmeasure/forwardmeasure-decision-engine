@@ -15,83 +15,129 @@ import com.forwardmeasure.decisionengine.contract.v1.GetCacheStatusRequest;
 import com.forwardmeasure.decisionengine.contract.v1.GetStatisticsRequest;
 import com.forwardmeasure.decisionengine.contract.v1.UnloadRulesetRequest;
 import com.forwardmeasure.decisionengine.contract.v1.WarmRulesetRequest;
-import com.forwardmeasure.decisionengine.core.CacheStatus;
-import com.forwardmeasure.decisionengine.core.RuleEngineAdmin;
-import com.forwardmeasure.decisionengine.core.RuntimeStatistics;
+import com.forwardmeasure.decisionengine.domain.RulesetMode;
+import com.forwardmeasure.decisionengine.domain.RulesetSource;
+import com.forwardmeasure.decisionengine.domain.RulesetVersion;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantContext;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantExecution;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantScopedRuleEvaluators;
+import com.forwardmeasure.jpa.liquibase.TenantDatabaseResolver;
+import com.forwardmeasure.jpa.tenancy.TenantDatabase;
+import com.forwardmeasure.jpa.tenancy.TenantId;
+import com.forwardmeasure.jpa.tenancy.ThreadBoundTenantScope;
+import io.grpc.Context;
 import io.grpc.stub.StreamObserver;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class AdminServiceImplTest {
+  private static final String RULESET = "golden/paymentsRisk";
+  private static final String DRL =
+      """
+      package rules;
+      global java.util.Map result;
+      rule "approve"
+      when
+        $fact : java.util.Map( this["approved"] == true )
+      then
+        result.put("outcome", "approved");
+      end
+      """;
 
   @Test
-  void exposesStatisticsAndCacheOperationsThroughGeneratedService() {
-    RecordingAdmin admin = new RecordingAdmin();
-    AdminServiceImpl service = new AdminServiceImpl(admin);
+  void warmingAndUnloadingAReplsetOperateOnTheCallingTenantsOwnCache() {
+    TenantId tenantId = new TenantId(UUID.randomUUID());
+    AdminServiceImpl service = newService(tenantId);
 
-    CapturingObserver<com.forwardmeasure.decisionengine.contract.v1.RuntimeStatistics> statistics =
-        new CapturingObserver<>();
-    service.getStatistics(GetStatisticsRequest.newBuilder().build(), statistics);
-    assertEquals(7, statistics.value.getInvocationCount());
-    assertEquals(3, statistics.value.getCacheHitCount());
-    assertNotNull(statistics.completed);
+    Context.current()
+        .withValue(TenantContext.KEY, tenantId)
+        .run(
+            () -> {
+              CapturingObserver<com.forwardmeasure.decisionengine.contract.v1.CacheStatus> warmed =
+                  new CapturingObserver<>();
+              service.warmRuleset(
+                  WarmRulesetRequest.newBuilder().setRuleset(RULESET).setVersion(1).build(),
+                  warmed);
+              assertEquals(1, warmed.value.getSize());
+              assertEquals(RULESET, warmed.value.getEntries(0).getRuleset());
 
-    CapturingObserver<com.forwardmeasure.decisionengine.contract.v1.CacheStatus> cache =
-        new CapturingObserver<>();
-    service.getCacheStatus(GetCacheStatusRequest.newBuilder().build(), cache);
-    assertEquals(2, cache.value.getSize());
-    assertEquals("golden/paymentsRisk", cache.value.getEntries(0).getRuleset());
+              CapturingObserver<com.forwardmeasure.decisionengine.contract.v1.RuntimeStatistics>
+                  statistics = new CapturingObserver<>();
+              service.getStatistics(GetStatisticsRequest.newBuilder().build(), statistics);
+              assertEquals(1, statistics.value.getCacheMissCount());
+              assertEquals(0, statistics.value.getCacheHitCount());
+              assertNotNull(statistics.completed);
 
-    service.unloadRuleset(
-        UnloadRulesetRequest.newBuilder().setRuleset("golden/paymentsRisk").setVersion(1).build(),
-        new CapturingObserver<>());
-    service.clearCompiledRulesCache(
-        ClearCompiledRulesCacheRequest.newBuilder().build(), new CapturingObserver<>());
-    service.warmRuleset(
-        WarmRulesetRequest.newBuilder().setRuleset("golden/paymentsRisk").setVersion(1).build(),
-        new CapturingObserver<>());
+              CapturingObserver<com.forwardmeasure.decisionengine.contract.v1.CacheStatus>
+                  afterUnload = new CapturingObserver<>();
+              service.unloadRuleset(
+                  UnloadRulesetRequest.newBuilder().setRuleset(RULESET).setVersion(1).build(),
+                  afterUnload);
+              assertEquals(0, afterUnload.value.getSize());
 
-    assertEquals(1, admin.unloadCalls);
-    assertEquals(1, admin.clearCalls);
-    assertEquals(1, admin.warmCalls);
+              service.warmRuleset(
+                  WarmRulesetRequest.newBuilder().setRuleset(RULESET).setVersion(1).build(),
+                  new CapturingObserver<>());
+              CapturingObserver<com.forwardmeasure.decisionengine.contract.v1.CacheStatus>
+                  afterClear = new CapturingObserver<>();
+              service.clearCompiledRulesCache(
+                  ClearCompiledRulesCacheRequest.newBuilder().build(), afterClear);
+              assertEquals(0, afterClear.value.getSize());
+            });
   }
 
-  private static final class RecordingAdmin implements RuleEngineAdmin {
-    private int unloadCalls;
-    private int clearCalls;
-    private int warmCalls;
+  @Test
+  void eachTenantHasItsOwnCacheEvenForTheSameRulesetName() {
+    TenantId tenantA = new TenantId(UUID.randomUUID());
+    TenantId tenantB = new TenantId(UUID.randomUUID());
+    AdminServiceImpl service = newService(tenantA, tenantB);
 
-    @Override
-    public RuntimeStatistics statistics() {
-      return new RuntimeStatistics(7, 6, 1, 3, 2, 1, 100, 20);
-    }
+    Context.current()
+        .withValue(TenantContext.KEY, tenantA)
+        .run(
+            () ->
+                service.warmRuleset(
+                    WarmRulesetRequest.newBuilder().setRuleset(RULESET).setVersion(1).build(),
+                    new CapturingObserver<>()));
 
-    @Override
-    public CacheStatus cacheStatus() {
-      return new CacheStatus(
-          100,
-          2,
-          List.of(
-              new CacheStatus.CacheEntry("golden/paymentsRisk", 1),
-              new CacheStatus.CacheEntry("golden/customerSegmentation", 1)));
-    }
+    Context.current()
+        .withValue(TenantContext.KEY, tenantB)
+        .run(
+            () -> {
+              CapturingObserver<com.forwardmeasure.decisionengine.contract.v1.CacheStatus> cache =
+                  new CapturingObserver<>();
+              service.getCacheStatus(GetCacheStatusRequest.newBuilder().build(), cache);
+              assertEquals(
+                  0, cache.value.getSize(), "tenant B must not see tenant A's cached ruleset");
+            });
+  }
 
-    @Override
-    public boolean unload(String ruleset, long version) {
-      unloadCalls++;
-      return true;
-    }
+  private static AdminServiceImpl newService(TenantId... tenantIds) {
+    RulesetVersion version =
+        new RulesetVersion(RULESET, 1, DRL, true, RulesetMode.STATELESS, 10, 60, null, "test");
+    RulesetSource source =
+        new RulesetSource() {
+          @Override
+          public RulesetVersion getActiveVersion(String ruleset) {
+            return version;
+          }
 
-    @Override
-    public void clearCache() {
-      clearCalls++;
+          @Override
+          public RulesetVersion getVersion(String ruleset, long number) {
+            return version;
+          }
+        };
+    Map<TenantId, TenantDatabase> resolutions = new HashMap<>();
+    int index = 0;
+    for (TenantId tenantId : tenantIds) {
+      resolutions.put(tenantId, TenantDatabase.forAlias("adminservicetest" + index++));
     }
-
-    @Override
-    public CacheStatus warm(String ruleset, long version) {
-      warmCalls++;
-      return cacheStatus();
-    }
+    return new AdminServiceImpl(
+        new TenantScopedRuleEvaluators(source, null),
+        new TenantExecution(
+            new ThreadBoundTenantScope(), TenantDatabaseResolver.preResolved(resolutions)));
   }
 
   private static final class CapturingObserver<T> implements StreamObserver<T> {

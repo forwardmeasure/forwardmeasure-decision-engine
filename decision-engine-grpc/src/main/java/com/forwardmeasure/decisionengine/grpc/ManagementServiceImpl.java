@@ -18,6 +18,7 @@ import com.forwardmeasure.decisionengine.contract.v1.RulesetManagementServiceGrp
 import com.forwardmeasure.decisionengine.contract.v1.RulesetMode;
 import com.forwardmeasure.decisionengine.core.DrlCompilationException;
 import com.forwardmeasure.decisionengine.domain.RulesetVersion;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantExecution;
 import com.forwardmeasure.decisionengine.jpa.application.RulesetVersionService;
 import com.google.protobuf.Timestamp;
 import io.grpc.Status;
@@ -27,9 +28,11 @@ import java.util.List;
 public class ManagementServiceImpl
     extends RulesetManagementServiceGrpc.RulesetManagementServiceImplBase {
   private final RulesetVersionService service;
+  private final TenantExecution tenantExecution;
 
-  public ManagementServiceImpl(RulesetVersionService service) {
+  public ManagementServiceImpl(RulesetVersionService service, TenantExecution tenantExecution) {
     this.service = service;
+    this.tenantExecution = tenantExecution;
   }
 
   @Override
@@ -37,16 +40,18 @@ public class ManagementServiceImpl
       CreateRulesetVersionRequest request,
       StreamObserver<com.forwardmeasure.decisionengine.contract.v1.RulesetVersion> observer) {
     try {
-      observer.onNext(
-          wire(
-              service.create(
-                  request.getRuleset(),
-                  request.getDrl(),
-                  mode(request.getMode()),
-                  request.getMaxWindowSize(),
-                  request.getIdleTimeoutSeconds(),
-                  request.getCreatedBy(),
-                  request.getActivate())));
+      RulesetVersion created =
+          tenantExecution.call(
+              () ->
+                  service.create(
+                      request.getRuleset(),
+                      request.getDrl(),
+                      mode(request.getMode()),
+                      request.getMaxWindowSize(),
+                      request.getIdleTimeoutSeconds(),
+                      request.getCreatedBy(),
+                      request.getActivate()));
+      observer.onNext(wire(created));
       observer.onCompleted();
     } catch (RuntimeException exception) {
       fail(observer, exception);
@@ -58,7 +63,8 @@ public class ManagementServiceImpl
       GetActiveRulesetVersionRequest request,
       StreamObserver<com.forwardmeasure.decisionengine.contract.v1.RulesetVersion> observer) {
     try {
-      observer.onNext(wire(service.getActive(request.getRuleset())));
+      RulesetVersion active = tenantExecution.call(() -> service.getActive(request.getRuleset()));
+      observer.onNext(wire(active));
       observer.onCompleted();
     } catch (RuntimeException exception) {
       fail(observer, exception);
@@ -70,7 +76,8 @@ public class ManagementServiceImpl
       ListRulesetVersionsRequest request, StreamObserver<ListRulesetVersionsResponse> observer) {
     try {
       List<RulesetVersion> items =
-          service.list(request.getRuleset(), request.getCursor(), request.getLimit());
+          tenantExecution.call(
+              () -> service.list(request.getRuleset(), request.getCursor(), request.getLimit()));
       var builder =
           ListRulesetVersionsResponse.newBuilder()
               .addAllItems(items.stream().map(ManagementServiceImpl::wire).toList());
@@ -88,7 +95,9 @@ public class ManagementServiceImpl
       ActivateRulesetVersionRequest request,
       StreamObserver<com.forwardmeasure.decisionengine.contract.v1.RulesetVersion> observer) {
     try {
-      observer.onNext(wire(service.activate(request.getRuleset(), request.getVersion())));
+      RulesetVersion activated =
+          tenantExecution.call(() -> service.activate(request.getRuleset(), request.getVersion()));
+      observer.onNext(wire(activated));
       observer.onCompleted();
     } catch (RuntimeException exception) {
       fail(observer, exception);
@@ -99,10 +108,9 @@ public class ManagementServiceImpl
   public void deleteRulesetVersion(
       DeleteRulesetVersionRequest request, StreamObserver<DeleteRulesetVersionResponse> observer) {
     try {
-      observer.onNext(
-          DeleteRulesetVersionResponse.newBuilder()
-              .setDeleted(service.delete(request.getRuleset(), request.getVersion()))
-              .build());
+      boolean deleted =
+          tenantExecution.call(() -> service.delete(request.getRuleset(), request.getVersion()));
+      observer.onNext(DeleteRulesetVersionResponse.newBuilder().setDeleted(deleted).build());
       observer.onCompleted();
     } catch (RuntimeException exception) {
       fail(observer, exception);

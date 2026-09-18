@@ -36,7 +36,7 @@ import org.hibernate.cfg.Configuration;
 import org.junit.jupiter.api.Test;
 
 /** Deep persistence/application integration coverage against the real migrated Postgres schema. */
-@WithMigratedTenantSchema(changelogs = RulesetSchemaMigrator.CHANGELOG)
+@WithMigratedTenantSchema(changelogs = DecisionEngineMigrations.CHANGELOG)
 class RulesetVersionPersistenceIntegrationTest {
 
   private static final String RULESET_PREFIX = "payments/risk";

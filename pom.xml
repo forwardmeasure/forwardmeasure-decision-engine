@@ -23,7 +23,7 @@
     <parent>
         <groupId>com.forwardmeasure.platform</groupId>
         <artifactId>forwardmeasure-platform</artifactId>
-        <version>1.0.0</version>
+        <version>1.1.0</version>
         <relativePath>../forwardmeasure-platform/pom.xml</relativePath>
     </parent>
 
@@ -57,15 +57,24 @@
     </issueManagement>
 
     <properties>
-        <revision>1.0.0-SNAPSHOT</revision>
-        <forwardmeasure.platform.version>1.0.0</forwardmeasure.platform.version>
-        <forwardmeasure.jpa.version>1.0.0</forwardmeasure.jpa.version>
-        <forwardmeasure.testcontainers.version>1.0.0</forwardmeasure.testcontainers.version>
+        <revision>1.1.0</revision>
 
         <!-- Not yet in forwardmeasure-platform's own BOM as of this repo's creation - see
              IMPLEMENTATION-SPEC.md Section 3. grpc.version/protobuf.version/protoc.jar.version
              ARE already in the platform BOM and must never be repinned here. -->
         <drools.version>10.2.0</drools.version>
+
+        <!-- Needed for openworkflow-migrations, reused as a shared library the same way
+             forwardmeasure-entity-intelligence's own migration Job does - see
+             decision-engine-database-migrations' own pom.xml description. Matches fei's own root
+             pom's pinned value exactly. -->
+        <forwardmeasure.openworkflow.version>1.1.0</forwardmeasure.openworkflow.version>
+
+        <!-- Not published to any remote repository as of this addition - requires a local
+             `mvn install` from forwardmeasure-authzen before this reactor can resolve it, same as
+             fei's own root pom flags. Needed for KeycloakOrganizationClaims (decision-engine-grpc's
+             VerifiedJwtTenantResolver). Matches fei's own pinned value exactly. -->
+        <forwardmeasure.authzen.version>1.0.0</forwardmeasure.authzen.version>
 
         <container-image.build>false</container-image.build>
         <container-image.push>false</container-image.push>
@@ -123,6 +132,27 @@
             <version>${forwardmeasure.testcontainers.version}</version>
             <type>pom</type>
             <scope>import</scope>
+        </dependency>
+        <!-- Aggregate BOM for every OpenWorkflow artifact this repo consumes - today just
+             openworkflow-migrations, reused as a library for real per-tenant-database
+             provisioning (OpenWorkflowTenantMigrator), matching forwardmeasure-entity-
+             intelligence's own root pom import exactly. -->
+        <dependency>
+            <groupId>com.forwardmeasure.openworkflow</groupId>
+            <artifactId>openworkflow-bom</artifactId>
+            <version>${forwardmeasure.openworkflow.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.authzen</groupId>
+            <artifactId>forwardmeasure-authzen-api</artifactId>
+            <version>${forwardmeasure.authzen.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.authzen</groupId>
+            <artifactId>forwardmeasure-authzen-testkit</artifactId>
+            <version>${forwardmeasure.authzen.version}</version>
         </dependency>
         <dependency>
             <groupId>org.kie</groupId>

@@ -18,23 +18,37 @@ import com.forwardmeasure.decisionengine.contract.v1.UnloadRulesetRequest;
 import com.forwardmeasure.decisionengine.contract.v1.WarmRulesetRequest;
 import com.forwardmeasure.decisionengine.core.RuleEngineAdmin;
 import com.forwardmeasure.decisionengine.domain.RulesetNotFoundException;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantContext;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantExecution;
+import com.forwardmeasure.decisionengine.grpc.tenancy.TenantScopedRuleEvaluators;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
-/** Framework-neutral administrative service for local evaluator operations. */
+/**
+ * Framework-neutral administrative service for local evaluator operations - "local" now means "the
+ * calling tenant's own compiled-rules cache", not one process-wide cache: see {@link
+ * TenantScopedRuleEvaluators}'s own javadoc for why a single shared cache would leak across tenants
+ * whose ruleset names happen to collide.
+ */
 public class AdminServiceImpl
     extends DecisionEngineAdminServiceGrpc.DecisionEngineAdminServiceImplBase {
-  private final RuleEngineAdmin admin;
+  private final TenantScopedRuleEvaluators evaluators;
+  private final TenantExecution tenantExecution;
 
-  public AdminServiceImpl(RuleEngineAdmin admin) {
-    this.admin = admin;
+  public AdminServiceImpl(TenantScopedRuleEvaluators evaluators, TenantExecution tenantExecution) {
+    this.evaluators = evaluators;
+    this.tenantExecution = tenantExecution;
+  }
+
+  private RuleEngineAdmin admin() {
+    return evaluators.forTenant(TenantContext.required());
   }
 
   @Override
   public void getStatistics(
       GetStatisticsRequest request, StreamObserver<RuntimeStatistics> observer) {
     try {
-      var value = admin.statistics();
+      var value = admin().statistics();
       observer.onNext(
           RuntimeStatistics.newBuilder()
               .setInvocationCount(value.invocationCount())
@@ -54,7 +68,7 @@ public class AdminServiceImpl
 
   @Override
   public void getCacheStatus(GetCacheStatusRequest request, StreamObserver<CacheStatus> observer) {
-    respondCache(observer, admin.cacheStatus());
+    respondCache(observer, admin().cacheStatus());
   }
 
   @Override
@@ -64,6 +78,7 @@ public class AdminServiceImpl
       return;
     }
     try {
+      RuleEngineAdmin admin = admin();
       admin.unload(request.getRuleset(), request.getVersion());
       respondCache(observer, admin.cacheStatus());
     } catch (RuntimeException exception) {
@@ -75,6 +90,7 @@ public class AdminServiceImpl
   public void clearCompiledRulesCache(
       ClearCompiledRulesCacheRequest request, StreamObserver<CacheStatus> observer) {
     try {
+      RuleEngineAdmin admin = admin();
       admin.clearCache();
       respondCache(observer, admin.cacheStatus());
     } catch (RuntimeException exception) {
@@ -89,7 +105,10 @@ public class AdminServiceImpl
       return;
     }
     try {
-      respondCache(observer, admin.warm(request.getRuleset(), request.getVersion()));
+      RuleEngineAdmin admin = admin();
+      var status =
+          tenantExecution.call(() -> admin.warm(request.getRuleset(), request.getVersion()));
+      respondCache(observer, status);
     } catch (RuntimeException exception) {
       fail(observer, exception);
     }

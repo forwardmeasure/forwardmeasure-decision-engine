@@ -6,12 +6,29 @@ micronaut:
 grpc:
   server:
     port: 9000
+# datasources.default is now used only as the Hibernate "bootstrap"/admin connection
+# (MultiTenantConnectionProvider#getAnyConnection - dialect resolution, DDL export tooling, never
+# real tenant data access) - see ForwardMeasureJpaFactory's own javadoc. Real per-tenant data access
+# is routed through forwardmeasure.jpa.tenant-database below (one physical database per tenant).
 datasources:
   default:
     url: ${DECISION_ENGINE_DATABASE_URL}
     username: ${DECISION_ENGINE_DATABASE_USERNAME}
     password: ${DECISION_ENGINE_DATABASE_PASSWORD}
     driverClassName: org.postgresql.Driver
+# Real multi-tenant JPA bootstrap (ForwardMeasureJpaFactory, from forwardmeasure-jpa-micronaut):
+# database-per-tenant, schema-per-product. DECISION_ENGINE_DATABASE_HOST/PORT are new - the existing
+# DECISION_ENGINE_DATABASE_URL/USERNAME/PASSWORD env vars carry a full JDBC URL, but
+# TenantDataSourceRegistry needs host/port broken out separately to build one JDBC URL per tenant
+# database; username/password are reused unchanged (same Postgres instance/credentials).
+forwardmeasure:
+  jpa:
+    functional-schema: decision_intelligence
+    tenant-database:
+      host: ${DECISION_ENGINE_DATABASE_HOST}
+      port: ${DECISION_ENGINE_DATABASE_PORT:5432}
+      username: ${DECISION_ENGINE_DATABASE_USERNAME}
+      password: ${DECISION_ENGINE_DATABASE_PASSWORD}
 jpa:
   default:
     packages-to-scan:
@@ -35,6 +52,15 @@ decision-engine:
     host: ${DECISION_ENGINE_VALKEY_HOST}
     port: ${DECISION_ENGINE_VALKEY_PORT:6379}
     password: ${DECISION_ENGINE_VALKEY_PASSWORD:}
+  # trusting (default) is correct only for today's internal-only (ClusterIP) deployment - callers
+  # (e.g. forwardmeasure-agent-os) have already resolved real tenant identity upstream through their
+  # own verified flow. verified is for a future standalone deployment - see
+  # VerifiedJwtTenantResolver's own javadoc. Deliberate, already-made decision this session.
+  tenant-resolution:
+    mode: ${DECISION_ENGINE_TENANT_RESOLUTION_MODE:trusting}
+    jwks-uri: ${DECISION_ENGINE_TENANT_RESOLUTION_JWKS_URI:}
+    issuer: ${DECISION_ENGINE_TENANT_RESOLUTION_ISSUER:}
+    organization-client-id: ${DECISION_ENGINE_TENANT_RESOLUTION_ORGANIZATION_CLIENT_ID:}
  # Licensed to the Apache Software Foundation (ASF) under one or more contributor license
  # agreements. See the NOTICE file distributed with this work for additional information regarding
  # copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0.
