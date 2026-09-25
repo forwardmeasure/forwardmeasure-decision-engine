@@ -74,7 +74,7 @@
              `mvn install` from forwardmeasure-authzen before this reactor can resolve it, same as
              fei's own root pom flags. Needed for KeycloakOrganizationClaims (decision-engine-grpc's
              VerifiedJwtTenantResolver). Matches fei's own pinned value exactly. -->
-        <forwardmeasure.authzen.version>1.0.0</forwardmeasure.authzen.version>
+        <forwardmeasure.authzen.version>1.1.0</forwardmeasure.authzen.version>
 
         <container-image.build>false</container-image.build>
         <container-image.push>false</container-image.push>
