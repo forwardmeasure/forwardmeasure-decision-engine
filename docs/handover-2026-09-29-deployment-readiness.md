@@ -12,7 +12,7 @@ explicitly *not* done — flagged as such — and are the actual reason this doc
 
 ## Update (later on 2026-09-29)
 
-- **§4.1 chart capability built**: `decision-engine-helm-chart` 0.1.5 (not yet published) has a
+- **§4.1 chart capability built**: `decision-engine-helm-chart` 0.1.6 (published) has a
   `cloudSqlProxy` block with the same values contract as `java-microservice-helm-chart`
   (Secret-key-only instance connection name, `<release>-cloudsql` / `db-cloud-sql-instance`),
   rendered as a native sidecar so it is up before the optional migration init container. The same

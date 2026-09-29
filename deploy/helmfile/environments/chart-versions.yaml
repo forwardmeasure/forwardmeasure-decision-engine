@@ -18,7 +18,7 @@
 # forwardmeasure-platform/deploy/helmfile/shared/chart-versions.yaml.
 chartVersions:
   # Matches helm-charts/charts/decision-engine-helm-chart/helm-chart-sources/Chart.yaml.
-  decisionEngine: "0.1.5"
+  decisionEngine: "0.1.6"
   # valkey: pinned only when factWindow.valkey.mode is "embedded". Match whichever version
   # forwardmeasure-platform's own chartVersions.valkey currently pins, unless there's a specific
   # reason to diverge.
