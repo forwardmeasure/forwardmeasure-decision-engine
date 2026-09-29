@@ -32,9 +32,31 @@ helmDefaults:
   createNamespace: false
 
 environments:
+  # Every environment ends with forwardmeasure-platform's shared layer (the single source of truth
+  # for cross-repository values - see its deploy/helmfile/shared/common.yaml.gotmpl), loaded by
+  # relative path from the sibling checkout.
   base:
     values:
+      - environments/chart-versions.yaml
       - environments/base.yaml.gotmpl
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/common.yaml.gotmpl
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/chart-versions.yaml
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/image-versions.yaml
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/clusters/base.yaml.gotmpl
+  # Real target cluster this repo's own release deploys into, alongside forwardmeasure-openworkflow/
+  # forwardmeasure-data-streaming/forwardmeasure-entity-intelligence - see
+  # environments/gcp-openworkflow-prod.yaml.gotmpl's own header for why this entry exists (fixes a
+  # real install-platform.sh abort, 2026-09-29). base.yaml.gotmpl first, then the prod overlay on
+  # top, same layering convention every other product repo's own helmfile.yaml.gotmpl already uses.
+  gcp-openworkflow-prod:
+    values:
+      - environments/chart-versions.yaml
+      - environments/base.yaml.gotmpl
+      - environments/gcp-openworkflow-prod.yaml.gotmpl
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/common.yaml.gotmpl
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/chart-versions.yaml
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/image-versions.yaml
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/clusters/gcp-openworkflow-prod.yaml.gotmpl
 
 ---
 
@@ -52,21 +74,27 @@ releases:
   # `condition:` dependency mechanism in Chart.yaml - nothing in this ecosystem uses that mechanism
   # yet, and reusing an already-proven pattern beats introducing a second way to do the same thing.
   - name: decision-engine-valkey
-    namespace: {{ .Values.namespaces.decisionEngine }}
+    namespace: {{ .Values.platform.namespaces.decisionEngine }}
     chart: valkey/valkey
     version: {{ .Values.chartVersions.valkey | quote }}
     installed: {{ if eq $valkeyMode "embedded" }}true{{ else }}false{{ end }}
     labels: {component: fact-window}
 
   - name: decision-engine
-    namespace: {{ .Values.namespaces.decisionEngine }}
+    namespace: {{ .Values.platform.namespaces.decisionEngine }}
     # Local workspace path; forwardmeasure-platform uses the published chart artifact instead.
     chart: ../../../helm-charts/charts/decision-engine-helm-chart/helm-chart-sources
     version: {{ .Values.chartVersions.decisionEngine | quote }}
+    # Defaults true (base/local/dev - always deployable there), overridden false by
+    # gcp-openworkflow-prod.yaml.gotmpl until its own real database/credentials/Valkey
+    # prerequisites exist for real - see that file's own header comment. Without this gate, that
+    # environment's own real-but-not-yet-functional values would install a non-functional pod
+    # instead of a clean no-op.
+    installed: {{ dig "decisionEngine" "enabled" true .Values }}
     labels: {component: server}
     needs:
       {{- if eq $valkeyMode "embedded" }}
-      - {{ .Values.namespaces.decisionEngine }}/decision-engine-valkey
+      - {{ .Values.platform.namespaces.decisionEngine }}/decision-engine-valkey
       {{- end }}
     values:
       - releases/decision-engine/base.yaml.gotmpl

@@ -25,22 +25,35 @@ image:
   tag: {{ .Values.imageVersions.decisionEngine.tag | quote }}
   digest: {{ .Values.imageVersions.decisionEngine.digest | quote }}
   pullPolicy: {{ .Values.imageVersions.decisionEngine.pullPolicy | quote }}
-imagePullSecrets: [{name: docker-io-credentials}]
+imagePullSecrets: [{name: {{ .Values.platform.secrets.imagePull }}}]
 
 database:
   url: {{ .Values.database.url | quote }}
   credentialsSecret: {{ .Values.database.credentialsSecret | quote }}
+
+# Cloud SQL Auth Proxy sidecar - same convention as forwardmeasure-openworkflow's own releases:
+# the instance connection name is Secret-key-only (<release>-cloudsql, key db-cloud-sql-instance),
+# the image is the one shared pin every product uses.
+cloudSqlProxy:
+  enabled: {{ dig "cloudSqlProxy" "enabled" false .Values }}
+  secretName: cloudsql
+  instanceKey: db-cloud-sql-instance
+  image:
+    repository: {{ .Values.imageVersions.cloudSqlProxy.repository | quote }}
+    tag: {{ .Values.imageVersions.cloudSqlProxy.tag | quote }}
+    digest: {{ .Values.imageVersions.cloudSqlProxy.digest | quote }}
 
 factWindow:
   valkey:
     {{- if eq $valkeyMode "embedded" }}
     # Standard in-cluster Service DNS for the decision-engine-valkey release in this same
     # namespace - the valkey/valkey chart creates a Service named after the release.
-    host: {{ printf "decision-engine-valkey.%s.svc.cluster.local" .Values.namespaces.decisionEngine | quote }}
+    host: {{ printf "decision-engine-valkey.%s.svc.cluster.local" .Values.platform.namespaces.decisionEngine | quote }}
     port: 6379
     credentialsSecret: decision-engine-valkey-auth
     {{- else }}
-    host: {{ .Values.factWindow.valkey.external.host | quote }}
+    # Blank external.host means the platform's own shared Valkey (shared platform.endpoints.valkey.host).
+    host: {{ .Values.factWindow.valkey.external.host | default .Values.platform.endpoints.valkey.host | quote }}
     port: {{ .Values.factWindow.valkey.external.port }}
     credentialsSecret: {{ .Values.factWindow.valkey.external.credentialsSecret | quote }}
     {{- end }}

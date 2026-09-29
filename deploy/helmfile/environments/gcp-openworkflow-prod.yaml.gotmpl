@@ -1,0 +1,75 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# The real target cluster (matches forwardmeasure-entity-intelligence's and
+# forwardmeasure-data-streaming's own identical overlays): this repo's own release deploys into the
+# SAME cluster forwardmeasure-openworkflow already runs in -
+# gke_genai-llm-393115_us-central1_openworkflow-prod - not a separate cluster.
+#
+# Added 2026-09-29, closing a real, confirmed bug: forwardmeasure-platform's own install-platform.sh
+# already invokes this repo's own `deploy/helmfile/install.sh gcp-openworkflow-prod` (added the same
+# day this repo was wired into that orchestration), but this repo's own helmfile.yaml.gotmpl had no
+# `gcp-openworkflow-prod` environment declared at all - only `base` - so `helmfile --environment
+# gcp-openworkflow-prod apply` would fail outright with an undeclared-environment error, aborting the
+# whole install-platform.sh chain at this, its last step. This file plus the `gcp-openworkflow-prod`
+# entry added to helmfile.yaml.gotmpl's own `environments:` map fixes that.
+#
+# This repository owns the decision-engine release (forwardmeasure-platform no longer carries its own
+# copy of it). Cluster facts and cross-repository values come from forwardmeasure-platform's shared
+# layer (shared/clusters/gcp-openworkflow-prod.yaml.gotmpl, shared/common.yaml.gotmpl).
+
+database:
+  # Same "localhost, not requiredEnv" reasoning as forwardmeasure-openworkflow's own
+  # environments/gcp-openworkflow-prod.yaml.gotmpl comment: real production connections in this
+  # cluster always go through a per-pod Cloud SQL Auth Proxy sidecar, so the endpoint is a fixed
+  # fact of this profile, not a per-deployment value.
+  #
+  url: jdbc:postgresql://localhost:5432/decision_engine
+  # REAL, CONFIRMED, STILL-OPEN GAP: this Secret has no real source anywhere yet. Confirmed via
+  # direct grep of k8s-infrastructure/opentofu/gcp/*.tf: "decision_engine"/"decisionEngine"/
+  # "decision-engine" has zero references - unlike entity_intelligence/keycloak/openworkflow/
+  # superset/platform, this database isn't in Terraform's cloudsql_databases map yet, so there is
+  # no real Cloud SQL database and no real runtime credential for this Secret to ever be populated
+  # from. Real, separate infrastructure work, not invented here.
+  credentialsSecret: decision-engine-database-credentials
+
+# factWindow.valkey.mode: external, NOT embedded - the platform's shared, cluster-wide Valkey
+# instance (shared platform.endpoints.valkey.host) rather than this repo's own decision-engine-valkey
+# release. Real,
+# confirmed, still-open gap, same shape as the database ones above: decision-engine-valkey-auth has
+# no real source yet either (no platform-secrets entry, no provisioning found anywhere).
+factWindow:
+  valkey:
+    mode: external
+    external:
+      # host left blank: the platform's shared Valkey address comes from the shared layer (platform.endpoints.valkey.host).
+      port: 6379
+      credentialsSecret: decision-engine-valkey-auth
+
+# Cloud SQL Auth Proxy sidecar (decision-engine-helm-chart 0.1.5+), same as every
+# forwardmeasure-openworkflow release in this cluster. REAL, STILL-OPEN PRECONDITIONS before it can
+# start: (1) the <release>-cloudsql Secret carrying key db-cloud-sql-instance does not exist - the
+# same unresolved gap forwardmeasure-openworkflow's own releases document; (2) no Workload Identity
+# mapping from this release's ServiceAccount to a GSA holding roles/cloudsql.client.
+cloudSqlProxy:
+  enabled: true
+
+# Disabled until the database (not yet in Terraform), runtime credentials and namespace-scoped
+# Valkey credentials exist, plus the Cloud SQL proxy preconditions above - enabling it without them
+# would create a non-functional pod. Consumed by helmfile.yaml.gotmpl's own `installed:` gate on the
+# decision-engine release.
+decisionEngine:
+  enabled: false

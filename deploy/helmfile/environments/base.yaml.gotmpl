@@ -17,27 +17,22 @@
 # Base environment values - see IMPLEMENTATION-SPEC.md Section 9.2. This repo's own helmfile is
 # scoped to one project, not a whole platform - one stage, not eight (contrast with
 # forwardmeasure-platform/deploy/helmfile's own environments/base.yaml.gotmpl).
-namespaces:
-  decisionEngine: decision-engine
+# The namespace (decision-engine), the platform's shared Valkey host and the image-pull Secret come
+# from forwardmeasure-platform's shared layer (.Values.platform.*), loaded last by helmfile.yaml.gotmpl.
 
-chartVersions:
-  decisionEngine: "0.1.3"
-  # valkey: pinned only when factWindow.valkey.mode is "embedded" - see helmfiles/10-decision-
-  # engine.yaml.gotmpl. Match whichever version forwardmeasure-platform's own chartVersions.valkey
-  # currently pins, for consistency, unless there's a specific reason to diverge.
-  valkey: "0.11.0"
+# chartVersions moved to environments/chart-versions.yaml (2026-09-29).
 
 imageVersions:
   decisionEngine:
     # Which framework binding this environment runs - quarkus/spring/micronaut all built and
     # verified per IMPLEMENTATION-SPEC.md Section 11.3 before any environment is expected to pick
-    # one over the others for real. TODO: set the real digest once a real image has been built and
-    # pushed, following the same two-independent-pull confirmation pattern used for OPA's own
-    # imageVersions.opa entry in forwardmeasure-platform/deploy/helmfile/environments/image-
-    # versions.yaml.
+    # one over the others for real. Tag 1.1.0 (was 0.1.0, which was never pushed) matches the repo's
+    # own version. The digest is the registry's own for that tag as of 2026-09-29 - setting it
+    # opts this entry into forwardmeasure-platform's sync-image-digests.sh, which re-resolves it on
+    # every install-platform.sh run (it never touches an empty digest).
     repository: docker.io/forwardmeasure/decision-engine-quarkus
-    tag: "0.1.0"
-    digest: ""
+    tag: "1.1.0"
+    digest: "sha256:0c7028ebb488e3369b011261c30b1159a065011bc7d2da4b8731cad66217ab2c"
     pullPolicy: IfNotPresent
 
 # ---------------------------------------------------------------------------
@@ -56,3 +51,7 @@ factWindow:
 database:
   url: "jdbc:postgresql://localhost:5432/decision_engine"
   credentialsSecret: decision-engine-database-credentials
+
+# Off outside a real GCP cluster - see gcp-openworkflow-prod.yaml.gotmpl.
+cloudSqlProxy:
+  enabled: false
