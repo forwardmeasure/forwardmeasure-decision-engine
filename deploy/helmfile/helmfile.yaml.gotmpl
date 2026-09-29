@@ -45,18 +45,28 @@ environments:
       - ../../../forwardmeasure-platform/deploy/helmfile/shared/clusters/base.yaml.gotmpl
   # Real target cluster this repo's own release deploys into, alongside forwardmeasure-openworkflow/
   # forwardmeasure-data-streaming/forwardmeasure-entity-intelligence - see
-  # environments/gcp-openworkflow-prod.yaml.gotmpl's own header for why this entry exists (fixes a
+  # environments/gcp-platform-cluster.yaml.gotmpl's own header for why this entry exists (fixes a
   # real install-platform.sh abort, 2026-09-29). base.yaml.gotmpl first, then the prod overlay on
   # top, same layering convention every other product repo's own helmfile.yaml.gotmpl already uses.
   gcp-openworkflow-prod:
     values:
       - environments/chart-versions.yaml
       - environments/base.yaml.gotmpl
-      - environments/gcp-openworkflow-prod.yaml.gotmpl
+      - environments/gcp-platform-cluster.yaml.gotmpl
       - ../../../forwardmeasure-platform/deploy/helmfile/shared/common.yaml.gotmpl
       - ../../../forwardmeasure-platform/deploy/helmfile/shared/chart-versions.yaml
       - ../../../forwardmeasure-platform/deploy/helmfile/shared/image-versions.yaml
       - ../../../forwardmeasure-platform/deploy/helmfile/shared/clusters/gcp-openworkflow-prod.yaml.gotmpl
+  # Worked example of a second platform cluster - same profile, different shared cluster file.
+  gcp-greenfield-example:
+    values:
+      - environments/chart-versions.yaml
+      - environments/base.yaml.gotmpl
+      - environments/gcp-platform-cluster.yaml.gotmpl
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/common.yaml.gotmpl
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/chart-versions.yaml
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/image-versions.yaml
+      - ../../../forwardmeasure-platform/deploy/helmfile/shared/clusters/gcp-greenfield-example.yaml.gotmpl
 
 ---
 
@@ -86,7 +96,7 @@ releases:
     chart: ../../../helm-charts/charts/decision-engine-helm-chart/helm-chart-sources
     version: {{ .Values.chartVersions.decisionEngine | quote }}
     # Defaults true (base/local/dev - always deployable there), overridden false by
-    # gcp-openworkflow-prod.yaml.gotmpl until its own real database/credentials/Valkey
+    # gcp-platform-cluster.yaml.gotmpl until its own real database/credentials/Valkey
     # prerequisites exist for real - see that file's own header comment. Without this gate, that
     # environment's own real-but-not-yet-functional values would install a non-functional pod
     # instead of a clean no-op.

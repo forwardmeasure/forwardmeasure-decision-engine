@@ -14,26 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# The real target cluster (matches forwardmeasure-entity-intelligence's and
-# forwardmeasure-data-streaming's own identical overlays): this repo's own release deploys into the
-# SAME cluster forwardmeasure-openworkflow already runs in -
-# gke_genai-llm-393115_us-central1_openworkflow-prod - not a separate cluster.
-#
-# Added 2026-09-29, closing a real, confirmed bug: forwardmeasure-platform's own install-platform.sh
-# already invokes this repo's own `deploy/helmfile/install.sh gcp-openworkflow-prod` (added the same
-# day this repo was wired into that orchestration), but this repo's own helmfile.yaml.gotmpl had no
-# `gcp-openworkflow-prod` environment declared at all - only `base` - so `helmfile --environment
-# gcp-openworkflow-prod apply` would fail outright with an undeclared-environment error, aborting the
-# whole install-platform.sh chain at this, its last step. This file plus the `gcp-openworkflow-prod`
-# entry added to helmfile.yaml.gotmpl's own `environments:` map fixes that.
-#
+# Profile for decision-engine on a GCP cluster running the shared
+# forwardmeasure-platform, used by the gcp-openworkflow-prod and gcp-greenfield-example
+# environments (was gcp-openworkflow-prod.yaml.gotmpl).
+# Nothing here is specific to one cluster: cluster facts (domain, tenants, endpoints, GCP project,
+# Cloud SQL instance) come from that environment's forwardmeasure-platform shared cluster file
+# (shared/clusters/<env>.yaml.gotmpl), loaded after this one.
+
 # This repository owns the decision-engine release (forwardmeasure-platform no longer carries its own
 # copy of it). Cluster facts and cross-repository values come from forwardmeasure-platform's shared
-# layer (shared/clusters/gcp-openworkflow-prod.yaml.gotmpl, shared/common.yaml.gotmpl).
+# layer (shared/clusters/<env>.yaml.gotmpl, shared/common.yaml.gotmpl).
 
 database:
   # Same "localhost, not requiredEnv" reasoning as forwardmeasure-openworkflow's own
-  # environments/gcp-openworkflow-prod.yaml.gotmpl comment: real production connections in this
+  # environments/gcp-platform-cluster.yaml.gotmpl comment: real production connections in this
   # cluster always go through a per-pod Cloud SQL Auth Proxy sidecar, so the endpoint is a fixed
   # fact of this profile, not a per-deployment value.
   #
