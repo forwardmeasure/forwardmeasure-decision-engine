@@ -42,9 +42,9 @@ public final class RulesetMigrationsMain {
     // EntityIntelligenceMigrationsMain exactly. Used to create each tenant's own database
     // (idempotent) and create/rotate decision-engine's own runtime role; never the role the
     // running gRPC server connects as.
-    String url = required("DECISION_ENGINE_DATABASE_URL");
-    String username = required("DECISION_ENGINE_DATABASE_USERNAME");
-    String password = required("DECISION_ENGINE_DATABASE_PASSWORD");
+    String url = required("DECISION_ENGINE_CONTROL_PLANE_DATABASE_URL");
+    String username = required("DECISION_ENGINE_ADMIN_DATABASE_USERNAME");
+    String password = required("DECISION_ENGINE_ADMIN_DATABASE_PASSWORD");
     String runtimeUsername = required("DECISION_ENGINE_RUNTIME_DATABASE_USERNAME");
     String runtimePassword = required("DECISION_ENGINE_RUNTIME_DATABASE_PASSWORD");
 
@@ -61,6 +61,10 @@ public final class RulesetMigrationsMain {
             FunctionalSchema.DECISION_INTELLIGENCE);
     LOG.info("Ensuring runtime role {} exists", runtimeUsername);
     migrator.ensureRuntimeRole(runtimePassword);
+    // The gRPC server resolves each call's tenant database from the platform database's
+    // tenant_registry (TenantDatabaseResolver) as this runtime role.
+    LOG.info("Granting runtime role {} read access to tenant_registry", runtimeUsername);
+    migrator.grantTenantRegistryRead();
 
     // Same alias derivation as fowf's own OpenWorkflowMigrationsMain / fei's
     // EntityIntelligenceMigrationsMain - TenantDatabase is always derived from the tenant's alias,
@@ -88,14 +92,15 @@ public final class RulesetMigrationsMain {
 
   /**
    * Derives the tenant-database-per-tenant JDBC URL prefix from {@code
-   * DECISION_ENGINE_DATABASE_URL} (a complete URL to the platform database) by stripping its
-   * trailing database-name segment.
+   * DECISION_ENGINE_CONTROL_PLANE_DATABASE_URL} (a complete URL to the platform database) by
+   * stripping its trailing database-name segment.
    */
   static String databaseUrlPrefix(String url) {
     int lastSlash = url.lastIndexOf('/');
     if (lastSlash < 0) {
       throw new IllegalArgumentException(
-          "DECISION_ENGINE_DATABASE_URL must be a JDBC URL with a database name: " + url);
+          "DECISION_ENGINE_CONTROL_PLANE_DATABASE_URL must be a JDBC URL with a database name: "
+              + url);
     }
     return url.substring(0, lastSlash + 1);
   }

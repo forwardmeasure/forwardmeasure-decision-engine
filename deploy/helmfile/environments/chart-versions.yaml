@@ -17,8 +17,10 @@
 # Chart version pins owned by this repository. Pins shared across repositories live in
 # forwardmeasure-platform/deploy/helmfile/shared/chart-versions.yaml.
 chartVersions:
-  # Matches helm-charts/charts/decision-engine-helm-chart/helm-chart-sources/Chart.yaml.
-  decisionEngine: "0.1.6"
+  # Matches helm-charts/charts/decision-engine-helm-chart/helm-chart-sources/Chart.yaml. 0.1.7 renames
+  # the containers' database env vars (CONTROL_PLANE/TENANT/RUNTIME/ADMIN) - publish it before a
+  # deploy that pulls the chart from the repository instead of the local source.
+  decisionEngine: "0.1.7"
   # valkey: pinned only when factWindow.valkey.mode is "embedded". Match whichever version
   # forwardmeasure-platform's own chartVersions.valkey currently pins, unless there's a specific
   # reason to diverge.

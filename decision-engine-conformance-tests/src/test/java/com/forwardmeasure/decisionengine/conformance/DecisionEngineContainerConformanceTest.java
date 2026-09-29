@@ -163,9 +163,11 @@ class DecisionEngineContainerConformanceTest {
         .withNetwork(network)
         .withStartupCheckStrategy(
             new OneShotStartupCheckStrategy().withTimeout(Duration.ofMinutes(2)))
-        .withEnv("DECISION_ENGINE_DATABASE_URL", "jdbc:postgresql://postgres:5432/postgres")
-        .withEnv("DECISION_ENGINE_DATABASE_USERNAME", POSTGRES_SUPERUSER)
-        .withEnv("DECISION_ENGINE_DATABASE_PASSWORD", POSTGRES_SUPERUSER_PASSWORD)
+        .withEnv(
+            "DECISION_ENGINE_CONTROL_PLANE_DATABASE_URL",
+            "jdbc:postgresql://postgres:5432/postgres")
+        .withEnv("DECISION_ENGINE_ADMIN_DATABASE_USERNAME", POSTGRES_SUPERUSER)
+        .withEnv("DECISION_ENGINE_ADMIN_DATABASE_PASSWORD", POSTGRES_SUPERUSER_PASSWORD)
         .withEnv("DECISION_ENGINE_RUNTIME_DATABASE_USERNAME", RUNTIME_USERNAME)
         .withEnv("DECISION_ENGINE_RUNTIME_DATABASE_PASSWORD", RUNTIME_PASSWORD)
         .withEnv(
@@ -180,13 +182,15 @@ class DecisionEngineContainerConformanceTest {
         .withExposedPorts(9000)
         // Bootstrap-only datasource (build-time Hibernate dialect resolution) - never real tenant
         // data access, see application.{yml,properties}'s own comment on this in each deployment.
-        .withEnv("DECISION_ENGINE_DATABASE_URL", "jdbc:postgresql://postgres:5432/postgres")
-        .withEnv("DECISION_ENGINE_DATABASE_USERNAME", RUNTIME_USERNAME)
-        .withEnv("DECISION_ENGINE_DATABASE_PASSWORD", RUNTIME_PASSWORD)
+        .withEnv(
+            "DECISION_ENGINE_CONTROL_PLANE_DATABASE_URL",
+            "jdbc:postgresql://postgres:5432/postgres")
+        .withEnv("DECISION_ENGINE_RUNTIME_DATABASE_USERNAME", RUNTIME_USERNAME)
+        .withEnv("DECISION_ENGINE_RUNTIME_DATABASE_PASSWORD", RUNTIME_PASSWORD)
         // Real per-tenant routing (TenantDataSourceRegistry) - host/port broken out separately so
         // one JDBC URL per tenant database can be built.
-        .withEnv("DECISION_ENGINE_DATABASE_HOST", "postgres")
-        .withEnv("DECISION_ENGINE_DATABASE_PORT", "5432")
+        .withEnv("DECISION_ENGINE_TENANT_DATABASE_HOST", "postgres")
+        .withEnv("DECISION_ENGINE_TENANT_DATABASE_PORT", "5432")
         .withEnv("DECISION_ENGINE_VALKEY_HOST", "valkey")
         .withEnv("DECISION_ENGINE_VALKEY_PORT", "6379")
         .withEnv("DECISION_ENGINE_VALKEY_PASSWORD", "valkey-password")

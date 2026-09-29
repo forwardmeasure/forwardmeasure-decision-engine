@@ -27,16 +27,30 @@ image:
   pullPolicy: {{ .Values.imageVersions.decisionEngine.pullPolicy | quote }}
 imagePullSecrets: [{name: {{ .Values.platform.secrets.imagePull }}}]
 
-database:
-  url: {{ .Values.database.url | quote }}
-  credentialsSecret: {{ .Values.database.credentialsSecret | quote }}
+{{- with (dig "platform" "cloud" "gcp" "decisionEngine" "serviceAccount" "" .Values) }}
+# GKE Workload Identity: the release's ServiceAccount (decision-engine) acts as this GSA, which holds
+# roles/cloudsql.client for the Cloud SQL Auth Proxy sidecar. From the shared cluster file.
+serviceAccount:
+  annotations:
+    iam.gke.io/gcp-service-account: {{ . | quote }}
+{{- end }}
 
-# Cloud SQL Auth Proxy sidecar - same convention as forwardmeasure-openworkflow's own releases:
-# the instance connection name is Secret-key-only (<release>-cloudsql, key db-cloud-sql-instance),
-# the image is the one shared pin every product uses.
+database:
+  # The platform control-plane database (tenant_registry), never a decision-engine database of its
+  # own - rulesets live in each tenant's database (IMPLEMENTATION-SPEC.md Section 7.3). localhost:
+  # through the Cloud SQL Auth Proxy on GCP, or a port-forward/local Postgres in base.
+  url: {{ dig "database" "url" (printf "jdbc:postgresql://localhost:5432/%s" .Values.platform.databases.controlPlane) .Values | quote }}
+  # username/password of the decision_engine runtime role - delivered by forwardmeasure-platform's
+  # platform-secrets (shared platform.secrets.decisionEngineDatabase).
+  credentialsSecret: {{ dig "database" "credentialsSecret" .Values.platform.secrets.decisionEngineDatabase .Values | quote }}
+
+# Cloud SQL Auth Proxy sidecar. The instance connection name is Secret-key-only (same convention
+# as forwardmeasure-openworkflow's releases); it rides in the same credentials Secret
+# (db-cloud-sql-instance), which platform-secrets composes from the shared cluster file. The image
+# is the one shared pin every product uses.
 cloudSqlProxy:
   enabled: {{ dig "cloudSqlProxy" "enabled" false .Values }}
-  secretName: cloudsql
+  existingSecretName: {{ .Values.platform.secrets.decisionEngineDatabase | quote }}
   instanceKey: db-cloud-sql-instance
   image:
     repository: {{ .Values.imageVersions.cloudSqlProxy.repository | quote }}
@@ -50,10 +64,11 @@ factWindow:
     # namespace - the valkey/valkey chart creates a Service named after the release.
     host: {{ printf "decision-engine-valkey.%s.svc.cluster.local" .Values.platform.namespaces.decisionEngine | quote }}
     port: 6379
-    credentialsSecret: decision-engine-valkey-auth
+    credentialsSecret: {{ .Values.platform.secrets.decisionEngineValkey | quote }}
     {{- else }}
     # Blank external.host means the platform's own shared Valkey (shared platform.endpoints.valkey.host).
     host: {{ .Values.factWindow.valkey.external.host | default .Values.platform.endpoints.valkey.host | quote }}
     port: {{ .Values.factWindow.valkey.external.port }}
-    credentialsSecret: {{ .Values.factWindow.valkey.external.credentialsSecret | quote }}
+    # The shared Valkey's password in this namespace (shared platform.secrets.decisionEngineValkey).
+    credentialsSecret: {{ .Values.factWindow.valkey.external.credentialsSecret | default .Values.platform.secrets.decisionEngineValkey | quote }}
     {{- end }}

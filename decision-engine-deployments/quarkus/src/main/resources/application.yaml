@@ -1,0 +1,62 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+# agreements. See the NOTICE file distributed with this work for additional information regarding
+# copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0.
+# You may obtain a copy of the License at https://www.apache.org/licenses/LICENSE-2.0
+quarkus:
+  grpc:
+    server:
+      port: 9000
+  # quarkus.datasource.* is the control-plane connection (tenant_registry lookups via
+  # TenantDatabaseResolver) and Hibernate's "bootstrap" connection (Quarkus's own build-time
+  # Hibernate ORM augmentation needs a default datasource configured for dialect resolution) - never
+  # real tenant data access. Real per-tenant data access is routed through
+  # forwardmeasure.jpa.tenant-database below (one physical database per tenant), via
+  # QuarkusTenantConnectionResolver (forwardmeasure-jpa-quarkus).
+  datasource:
+    db-kind: postgresql
+    jdbc:
+      url: "${DECISION_ENGINE_CONTROL_PLANE_DATABASE_URL}"
+    username: "${DECISION_ENGINE_RUNTIME_DATABASE_USERNAME}"
+    password: "${DECISION_ENGINE_RUNTIME_DATABASE_PASSWORD}"
+  hibernate-orm:
+    database:
+      generation: none
+    mapping:
+      format:
+        global: ignore
+    packages: com.forwardmeasure.jpa.identity.entity,com.forwardmeasure.jpa.locking.entity,com.forwardmeasure.jpa.asynctask.entity,com.forwardmeasure.jpa.core.entity,com.forwardmeasure.decisionengine.jpa.entity
+    # DATABASE (not SCHEMA) - QuarkusTenantConnectionResolver implements Quarkus's
+    # TenantConnectionResolver SPI, which Quarkus only consults under the DATABASE multitenancy
+    # strategy (confirmed by decompiling io.quarkus.hibernate.orm.runtime.migration.MultiTenancyStrategy
+    # in quarkus-hibernate-orm 3.39.1 - HibernateMultiTenantConnectionProvider.getAnyConnectionProvider
+    # resolves a TenantResolver bean either way, but the per-tenant ConnectionProvider path via
+    # TenantConnectionResolver is DATABASE-strategy specific). Each tenant gets its own physical
+    # database (TenantDataSourceRegistry), not just a schema-switch within one shared connection pool.
+    multitenant: DATABASE
+# Real multi-tenant JPA bootstrap (forwardmeasure-jpa-quarkus): database-per-tenant, schema-per-product.
+# DECISION_ENGINE_TENANT_DATABASE_HOST/PORT: where tenant databases live - TenantDataSourceRegistry
+# builds one JDBC URL per tenant database (forwardmeasure_<alias>, resolved from tenant_registry) from
+# them. Same runtime role (DECISION_ENGINE_RUNTIME_DATABASE_USERNAME/PASSWORD) as the control-plane
+# connection.
+forwardmeasure:
+  jpa:
+    functional-schema: decision_intelligence
+    tenant-database:
+      host: "${DECISION_ENGINE_TENANT_DATABASE_HOST}"
+      port: "${DECISION_ENGINE_TENANT_DATABASE_PORT:5432}"
+      username: "${DECISION_ENGINE_RUNTIME_DATABASE_USERNAME}"
+      password: "${DECISION_ENGINE_RUNTIME_DATABASE_PASSWORD}"
+decision-engine:
+  valkey:
+    host: "${DECISION_ENGINE_VALKEY_HOST}"
+    port: "${DECISION_ENGINE_VALKEY_PORT:6379}"
+    password: "${DECISION_ENGINE_VALKEY_PASSWORD:}"
+  # trusting (default) is correct only for today's internal-only (ClusterIP) deployment - callers
+  # (e.g. forwardmeasure-agent-os) have already resolved real tenant identity upstream through their
+  # own verified flow. verified is for a future standalone deployment - see
+  # VerifiedJwtTenantResolver's own javadoc. Deliberate, already-made decision this session.
+  tenant-resolution:
+    mode: "${DECISION_ENGINE_TENANT_RESOLUTION_MODE:trusting}"
+    jwks-uri: "${DECISION_ENGINE_TENANT_RESOLUTION_JWKS_URI:}"
+    issuer: "${DECISION_ENGINE_TENANT_RESOLUTION_ISSUER:}"
+    organization-client-id: "${DECISION_ENGINE_TENANT_RESOLUTION_ORGANIZATION_CLIENT_ID:}"

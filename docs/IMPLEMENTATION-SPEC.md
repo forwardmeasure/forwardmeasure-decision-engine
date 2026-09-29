@@ -596,10 +596,14 @@ not a fresh design:
 - Two-credential model: a bounded migration Job connects as an **administrator** credential
   (creates each tenant's own database, runs Liquibase, creates/rotates a scoped **runtime** role
   via `GRANT` + `ALTER DEFAULT PRIVILEGES`); the running server connects only as the runtime role,
-  never the administrator credential. Same environment variable naming convention agent-os uses:
-  `DECISION_ENGINE_DATABASE_URL` / `_USERNAME` / `_PASSWORD` mean the platform control-plane
-  credential in the migration job (never a tenant's own database), the runtime credential in the
-  server.
+  never the administrator credential. Environment variables are named by role, shared with
+  forwardmeasure-openworkflow and forwardmeasure-entity-intelligence:
+  `DECISION_ENGINE_CONTROL_PLANE_DATABASE_URL` is the platform control-plane database (tenant
+  registry) for both; the migration job connects with `DECISION_ENGINE_ADMIN_DATABASE_USERNAME` /
+  `_PASSWORD` and creates the role named by `DECISION_ENGINE_RUNTIME_DATABASE_USERNAME` / `_PASSWORD`;
+  the server connects only as that runtime role, and builds each tenant database's URL from
+  `DECISION_ENGINE_TENANT_DATABASE_HOST` / `_PORT` (renamed 2026-09-29 from
+  `DECISION_ENGINE_DATABASE_*`, which meant admin in one place and runtime in the other).
 - **Database-per-tenant, schema-per-domain (revised - see Section 13 item 3)**: decision-engine
   reuses `openworkflow-migrations`' own `OpenWorkflowTenantMigrator` as a library, exactly the way
   `forwardmeasure-entity-intelligence`'s own migration Job does, rather than a second, parallel

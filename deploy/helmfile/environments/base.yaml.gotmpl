@@ -48,9 +48,8 @@ factWindow:
       port: 6379
       credentialsSecret: ""
 
-database:
-  url: "jdbc:postgresql://localhost:5432/decision_engine"
-  credentialsSecret: decision-engine-database-credentials
+# database.url and database.credentialsSecret default to the shared layer (the control-plane
+# database and platform.secrets.decisionEngineDatabase) - see releases/decision-engine/base.yaml.gotmpl.
 
 # Off outside a real GCP cluster - see gcp-platform-cluster.yaml.gotmpl.
 cloudSqlProxy:

@@ -25,45 +25,31 @@
 # copy of it). Cluster facts and cross-repository values come from forwardmeasure-platform's shared
 # layer (shared/clusters/<env>.yaml.gotmpl, shared/common.yaml.gotmpl).
 
-database:
-  # Same "localhost, not requiredEnv" reasoning as forwardmeasure-openworkflow's own
-  # environments/gcp-platform-cluster.yaml.gotmpl comment: real production connections in this
-  # cluster always go through a per-pod Cloud SQL Auth Proxy sidecar, so the endpoint is a fixed
-  # fact of this profile, not a per-deployment value.
-  #
-  url: jdbc:postgresql://localhost:5432/decision_engine
-  # REAL, CONFIRMED, STILL-OPEN GAP: this Secret has no real source anywhere yet. Confirmed via
-  # direct grep of k8s-infrastructure/opentofu/gcp/*.tf: "decision_engine"/"decisionEngine"/
-  # "decision-engine" has zero references - unlike entity_intelligence/keycloak/openworkflow/
-  # superset/platform, this database isn't in Terraform's cloudsql_databases map yet, so there is
-  # no real Cloud SQL database and no real runtime credential for this Secret to ever be populated
-  # from. Real, separate infrastructure work, not invented here.
-  credentialsSecret: decision-engine-database-credentials
+# Database: no database of decision-engine's own - rulesets live in each tenant's database
+# (forwardmeasure_<alias>, schema decision_intelligence), provisioned by forwardmeasure-openworkflow's
+# decision-engine-migrations Job. The server connects to the platform control-plane database
+# (tenant_registry) as the decision_engine runtime role, through its Cloud SQL Auth Proxy sidecar.
+# Everything it needs is supplied from outside this file:
+#   - URL: shared platform.databases.controlPlane (releases/decision-engine/base.yaml.gotmpl)
+#   - credentials + Cloud SQL instance: Secret platform.secrets.decisionEngineDatabase, delivered by
+#     forwardmeasure-platform's platform-secrets
+#   - Workload Identity GSA (roles/cloudsql.client): shared cluster file
+#     cloud.gcp.decisionEngine.serviceAccount (created by openworkflow-k8s-setup's Terraform on
+#     gcp-openworkflow-prod, k8s-infrastructure/opentofu/gcp on a new cluster)
+cloudSqlProxy:
+  enabled: true
 
-# factWindow.valkey.mode: external, NOT embedded - the platform's shared, cluster-wide Valkey
-# instance (shared platform.endpoints.valkey.host) rather than this repo's own decision-engine-valkey
-# release. Real,
-# confirmed, still-open gap, same shape as the database ones above: decision-engine-valkey-auth has
-# no real source yet either (no platform-secrets entry, no provisioning found anywhere).
+# Fact window: the platform's shared, cluster-wide Valkey (shared platform.endpoints.valkey.host),
+# not this repo's own decision-engine-valkey release; its password arrives as Secret
+# platform.secrets.decisionEngineValkey, delivered by platform-secrets.
 factWindow:
   valkey:
     mode: external
     external:
-      # host left blank: the platform's shared Valkey address comes from the shared layer (platform.endpoints.valkey.host).
       port: 6379
-      credentialsSecret: decision-engine-valkey-auth
 
-# Cloud SQL Auth Proxy sidecar (decision-engine-helm-chart 0.1.6+), same as every
-# forwardmeasure-openworkflow release in this cluster. REAL, STILL-OPEN PRECONDITIONS before it can
-# start: (1) the <release>-cloudsql Secret carrying key db-cloud-sql-instance does not exist - the
-# same unresolved gap forwardmeasure-openworkflow's own releases document; (2) no Workload Identity
-# mapping from this release's ServiceAccount to a GSA holding roles/cloudsql.client.
-cloudSqlProxy:
-  enabled: true
-
-# Disabled until the database (not yet in Terraform), runtime credentials and namespace-scoped
-# Valkey credentials exist, plus the Cloud SQL proxy preconditions above - enabling it without them
-# would create a non-functional pod. Consumed by helmfile.yaml.gotmpl's own `installed:` gate on the
-# decision-engine release.
+# Consumed by helmfile.yaml.gotmpl's `installed:` gate on the decision-engine release. On since
+# 2026-09-29, once the prerequisites above were all provided by config. They still have to exist
+# live before the release can start - see docs/handover-2026-09-29-deployment-readiness.md, §4.
 decisionEngine:
-  enabled: false
+  enabled: true
