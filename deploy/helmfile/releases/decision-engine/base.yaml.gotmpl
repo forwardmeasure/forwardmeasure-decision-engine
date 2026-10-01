@@ -20,10 +20,11 @@
 # directly. decision-engine-fact-window's ValkeyFactWindowStore only ever sees a plain host:port -
 # it has no idea which of these two cases produced it, by design.
 {{- $valkeyMode := .Values.factWindow.valkey.mode }}
+# The framework binding forwardmeasure-platform's platform.framework selects.
 image:
-  repository: {{ .Values.imageVersions.decisionEngine.repository | quote }}
+  repository: {{ index .Values.imageVersions.decisionEngine.repositories .Values.platform.framework | quote }}
   tag: {{ .Values.imageVersions.decisionEngine.tag | quote }}
-  digest: {{ .Values.imageVersions.decisionEngine.digest | quote }}
+  digest: {{ index .Values.imageVersions.decisionEngine.digests .Values.platform.framework | quote }}
   pullPolicy: {{ .Values.imageVersions.decisionEngine.pullPolicy | quote }}
 imagePullSecrets: [{name: {{ .Values.platform.secrets.imagePull }}}]
 
