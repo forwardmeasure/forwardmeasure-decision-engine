@@ -77,6 +77,12 @@
             <artifactId>grpc-stub</artifactId>
         </dependency>
         <dependency>
+            <!-- grpc.health.v1 client stubs: the probe check every framework must answer. -->
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-services</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
         </dependency>

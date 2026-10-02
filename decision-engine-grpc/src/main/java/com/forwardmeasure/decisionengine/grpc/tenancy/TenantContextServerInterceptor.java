@@ -34,6 +34,13 @@ import org.slf4j.LoggerFactory;
 public class TenantContextServerInterceptor implements ServerInterceptor {
   private static final Logger LOG = LoggerFactory.getLogger(TenantContextServerInterceptor.class);
 
+  /**
+   * The chart's readiness/liveness probes are gRPC health checks, and kubelet sends no metadata -
+   * so health needs no tenant, the way an HTTP service leaves its health endpoint open. It carries
+   * no tenant data. Same on every framework: each registers this interceptor globally.
+   */
+  static final String HEALTH_SERVICE = "grpc.health.v1.Health";
+
   private final TenantIdResolver resolver;
 
   public TenantContextServerInterceptor(TenantIdResolver resolver) {
@@ -44,6 +51,9 @@ public class TenantContextServerInterceptor implements ServerInterceptor {
   @Override
   public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
       ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+    if (HEALTH_SERVICE.equals(call.getMethodDescriptor().getServiceName())) {
+      return next.startCall(call, headers);
+    }
     String method = call.getMethodDescriptor().getFullMethodName();
     TenantId tenantId;
     try {

@@ -45,6 +45,9 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.Metadata;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import io.grpc.health.v1.HealthCheckRequest;
+import io.grpc.health.v1.HealthCheckResponse;
+import io.grpc.health.v1.HealthGrpc;
 import io.grpc.stub.AbstractStub;
 import io.grpc.stub.MetadataUtils;
 import java.sql.Connection;
@@ -211,6 +214,15 @@ class DecisionEngineContainerConformanceTest {
     ManagedChannel channel =
         ManagedChannelBuilder.forAddress("localhost", port).usePlaintext().build();
     try {
+      // The chart's readiness/liveness probes are gRPC health checks that send no metadata: every
+      // framework must serve grpc.health.v1.Health, and tenant resolution must not guard it.
+      assertEquals(
+          HealthCheckResponse.ServingStatus.SERVING,
+          HealthGrpc.newBlockingStub(channel)
+              .check(HealthCheckRequest.getDefaultInstance())
+              .getStatus(),
+          framework + " must serve grpc.health.v1.Health without tenant metadata");
+
       var managementA = withTenant(RulesetManagementServiceGrpc.newBlockingStub(channel), tenantA);
       var evaluationA = withTenant(EvaluationServiceGrpc.newBlockingStub(channel), tenantA);
       var adminA = withTenant(DecisionEngineAdminServiceGrpc.newBlockingStub(channel), tenantA);

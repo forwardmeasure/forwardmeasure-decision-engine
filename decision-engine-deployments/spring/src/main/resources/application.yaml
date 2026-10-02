@@ -9,6 +9,10 @@ spring:
     server:
       port: 9000
       enabled: true
+      # grpc-services (for the health service) also turns on Spring gRPC's reflection service by
+      # default; Quarkus serves reflection only in dev mode and Micronaut never registers it.
+      reflection:
+        enabled: false
   # spring.datasource.* is the control-plane connection (tenant_registry lookups via
   # TenantDatabaseResolver) and Hibernate's "bootstrap" connection
   # (MultiTenantConnectionProvider#getAnyConnection - dialect resolution, DDL export tooling, never

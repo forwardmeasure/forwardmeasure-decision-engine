@@ -86,6 +86,15 @@
                  before relying on this - IMPLEMENTATION-SPEC.md Section 3. -->
         </dependency>
         <dependency>
+            <!-- grpc.health.v1.Health, which the chart's readiness/liveness probes call.
+                 micronaut-grpc-health's GrpcHealthFactory is @Requires(classes = HealthStatusManager),
+                 which lives here; without it no health service is registered and the pod never
+                 becomes Ready. Quarkus serves the same service from quarkus-grpc; Spring needs this
+                 jar too. -->
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-services</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.micronaut.sql</groupId>
             <artifactId>micronaut-jdbc-hikari</artifactId>
         </dependency>

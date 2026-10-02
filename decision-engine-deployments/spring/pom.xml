@@ -56,6 +56,11 @@
                 <artifactId>grpc-context</artifactId>
                 <version>${grpc.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-services</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -102,6 +107,14 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-context</artifactId>
+        </dependency>
+        <dependency>
+            <!-- grpc.health.v1.Health, which the chart's readiness/liveness probes call. Spring gRPC's
+                 health auto-configuration is @ConditionalOnClass(HealthStatusManager), which lives
+                 here; without it no health service is registered and the pod never becomes Ready.
+                 Quarkus serves the same service from quarkus-grpc; Micronaut needs this jar too. -->
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-services</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
