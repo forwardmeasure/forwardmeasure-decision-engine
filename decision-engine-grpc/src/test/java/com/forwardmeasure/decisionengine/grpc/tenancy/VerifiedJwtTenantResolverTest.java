@@ -33,7 +33,10 @@ class VerifiedJwtTenantResolverTest {
   private static final Metadata.Key<String> AUTHORIZATION_HEADER =
       Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
   private static final String ORGANIZATION_ALIAS = "acme-decision-engine";
-  private static final UUID TENANT_UUID = UUID.randomUUID();
+  private static final com.forwardmeasure.jpa.tenancy.Did TENANT_DID =
+      com.forwardmeasure.jpa.tenancy.Did.parse("did:fwmtest:tenant:" + UUID.randomUUID());
+  private static final UUID TENANT_UUID =
+      com.forwardmeasure.jpa.tenancy.TenantId.forDid(TENANT_DID).value();
   private static final String ROLE = "decision-engine-caller";
 
   private static AuthzenKeycloakFixture KEYCLOAK;
@@ -42,7 +45,7 @@ class VerifiedJwtTenantResolverTest {
   @BeforeAll
   static void startFixture() {
     KEYCLOAK = AuthzenKeycloakFixture.start();
-    KEYCLOAK.provisionTenant(ORGANIZATION_ALIAS, TENANT_UUID, ROLE);
+    KEYCLOAK.provisionTenant(ORGANIZATION_ALIAS, TENANT_DID, ROLE);
     TOKEN = KEYCLOAK.mintUserToken();
   }
 

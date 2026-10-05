@@ -23,7 +23,6 @@ import com.forwardmeasure.decisionengine.jpa.application.RulesetVersionService;
 import com.forwardmeasure.decisionengine.jpa.repository.RulesetVersionRepository;
 import com.forwardmeasure.decisionengine.jpa.service.JpaRulesetSource;
 import com.forwardmeasure.decisionengine.jpa.service.RulesetVersionServiceImpl;
-import com.forwardmeasure.jpa.liquibase.TenantDatabaseResolver;
 import com.forwardmeasure.jpa.tenancy.TenantScope;
 import io.grpc.ServerInterceptor;
 import io.micronaut.context.annotation.Factory;
@@ -81,8 +80,8 @@ public class DecisionEngineMicronautBinding {
   }
 
   @Singleton
-  TenantExecution tenantExecution(TenantScope tenantScope, TenantDatabaseResolver databases) {
-    return new TenantExecution(tenantScope, databases);
+  TenantExecution tenantExecution(TenantScope tenantScope) {
+    return new TenantExecution(tenantScope);
   }
 
   /**

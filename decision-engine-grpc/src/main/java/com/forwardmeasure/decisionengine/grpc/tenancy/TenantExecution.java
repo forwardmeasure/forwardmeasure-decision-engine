@@ -7,7 +7,6 @@
  */
 package com.forwardmeasure.decisionengine.grpc.tenancy;
 
-import com.forwardmeasure.jpa.liquibase.TenantDatabaseResolver;
 import com.forwardmeasure.jpa.tenancy.TenantId;
 import com.forwardmeasure.jpa.tenancy.TenantScope;
 import java.util.Objects;
@@ -23,20 +22,13 @@ import java.util.function.Supplier;
  * data (directly, or transitively through {@code RulesetVersionService}/a per-tenant {@code
  * DroolsRuleEvaluator}) must route through this, not call {@code TenantScope} directly.
  *
- * <p>Neither {@code TrustingMetadataTenantResolver} nor {@code VerifiedJwtTenantResolver} ever
- * produces anything but a bare {@link TenantId} - gRPC metadata/JWT claims as extracted here carry
- * no tenant alias - so, unlike the HTTP-facing frameworks (which resolve {@code TenantScope}
- * straight from an already-alias-bearing {@code ActiveOrganization}), this class genuinely needs a
- * {@link TenantDatabaseResolver} lookup to turn that {@code TenantId} into the real {@code
- * TenantDatabase} routing target.
+ * <p>Database resolution belongs to the persistence connection provider.
  */
 public final class TenantExecution {
   private final TenantScope tenantScope;
-  private final TenantDatabaseResolver databases;
 
-  public TenantExecution(TenantScope tenantScope, TenantDatabaseResolver databases) {
+  public TenantExecution(TenantScope tenantScope) {
     this.tenantScope = Objects.requireNonNull(tenantScope, "tenantScope");
-    this.databases = Objects.requireNonNull(databases, "databases");
   }
 
   public <T> T call(Supplier<T> operation) {
@@ -44,11 +36,11 @@ public final class TenantExecution {
   }
 
   public void run(Runnable operation) {
-    tenantScope.run(databases.resolve(TenantContext.required()), operation);
+    tenantScope.run(TenantContext.required(), operation);
   }
 
   /** Convenience for call sites that already resolved the tenant themselves. */
   public <T> T call(TenantId tenantId, Supplier<T> operation) {
-    return tenantScope.call(databases.resolve(tenantId), operation);
+    return tenantScope.call(tenantId, operation);
   }
 }

@@ -16,14 +16,11 @@ import com.forwardmeasure.decisionengine.domain.RulesetVersion;
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantContext;
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantExecution;
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantScopedRuleEvaluators;
-import com.forwardmeasure.jpa.liquibase.TenantDatabaseResolver;
-import com.forwardmeasure.jpa.tenancy.TenantDatabase;
 import com.forwardmeasure.jpa.tenancy.TenantId;
 import com.forwardmeasure.jpa.tenancy.ThreadBoundTenantScope;
 import io.grpc.Context;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -53,10 +50,7 @@ class EvaluationServiceImplTest {
     var service =
         new EvaluationServiceImpl(
             new TenantScopedRuleEvaluators(throwingSource, null),
-            new TenantExecution(
-                new ThreadBoundTenantScope(),
-                TenantDatabaseResolver.preResolved(
-                    Map.of(tenantId, TenantDatabase.forAlias("evaluationservicetest")))));
+            new TenantExecution(new ThreadBoundTenantScope()));
     var observed = new AtomicReference<Throwable>();
 
     Context.current()

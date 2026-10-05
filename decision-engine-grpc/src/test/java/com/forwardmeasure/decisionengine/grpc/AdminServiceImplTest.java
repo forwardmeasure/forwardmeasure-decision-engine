@@ -21,7 +21,6 @@ import com.forwardmeasure.decisionengine.domain.RulesetVersion;
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantContext;
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantExecution;
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantScopedRuleEvaluators;
-import com.forwardmeasure.jpa.liquibase.TenantDatabaseResolver;
 import com.forwardmeasure.jpa.tenancy.TenantDatabase;
 import com.forwardmeasure.jpa.tenancy.TenantId;
 import com.forwardmeasure.jpa.tenancy.ThreadBoundTenantScope;
@@ -136,8 +135,7 @@ class AdminServiceImplTest {
     }
     return new AdminServiceImpl(
         new TenantScopedRuleEvaluators(source, null),
-        new TenantExecution(
-            new ThreadBoundTenantScope(), TenantDatabaseResolver.preResolved(resolutions)));
+        new TenantExecution(new ThreadBoundTenantScope()));
   }
 
   private static final class CapturingObserver<T> implements StreamObserver<T> {

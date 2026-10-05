@@ -40,7 +40,6 @@ import com.forwardmeasure.decisionengine.jpa.application.RulesetVersionService;
 import com.forwardmeasure.decisionengine.jpa.repository.RulesetVersionRepository;
 import com.forwardmeasure.decisionengine.jpa.service.JpaRulesetSource;
 import com.forwardmeasure.decisionengine.jpa.service.RulesetVersionServiceImpl;
-import com.forwardmeasure.jpa.liquibase.TenantDatabaseResolver;
 import com.forwardmeasure.jpa.tenancy.TenantScope;
 import io.grpc.stub.StreamObserver;
 import io.quarkus.grpc.GlobalInterceptor;
@@ -93,8 +92,8 @@ public class DecisionEngineQuarkusBinding {
 
   @Produces
   @ApplicationScoped
-  TenantExecution tenantExecution(TenantScope tenantScope, TenantDatabaseResolver databases) {
-    return new TenantExecution(tenantScope, databases);
+  TenantExecution tenantExecution(TenantScope tenantScope) {
+    return new TenantExecution(tenantScope);
   }
 
   /**
