@@ -35,11 +35,10 @@ imageVersions:
       micronaut: docker.io/forwardmeasure/decision-engine-micronaut
     tag: "1.1.0"
     digests:
-      quarkus: "sha256:0c7028ebb488e3369b011261c30b1159a065011bc7d2da4b8731cad66217ab2c"
+      quarkus: "sha256:0387dc829f5fee757734a2de7528c885d7827789d512cf4f576fc879ba259656"
       spring: ""
       micronaut: ""
     pullPolicy: IfNotPresent
-
 # ---------------------------------------------------------------------------
 # The Valkey embedded-vs-external toggle (IMPLEMENTATION-SPEC.md Section 9.1/9.2). "embedded" or
 # "external", not a boolean - a third mode (e.g. "disabled", for a deployment that only ever runs
@@ -52,7 +51,6 @@ factWindow:
       host: ""
       port: 6379
       credentialsSecret: ""
-
 # database.url and database.credentialsSecret default to the shared layer (the control-plane
 # database and platform.secrets.decisionEngineDatabase) - see releases/decision-engine/base.yaml.gotmpl.
 

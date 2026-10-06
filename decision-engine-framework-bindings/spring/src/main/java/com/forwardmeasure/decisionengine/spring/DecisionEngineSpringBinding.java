@@ -17,7 +17,6 @@ import com.forwardmeasure.decisionengine.grpc.tenancy.TenantContextServerInterce
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantExecution;
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantIdResolver;
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantScopedRuleEvaluators;
-import com.forwardmeasure.decisionengine.grpc.tenancy.TrustingMetadataTenantResolver;
 import com.forwardmeasure.decisionengine.grpc.tenancy.VerifiedJwtTenantResolver;
 import com.forwardmeasure.decisionengine.jpa.application.RulesetVersionService;
 import com.forwardmeasure.decisionengine.jpa.repository.RulesetVersionRepository;
@@ -68,52 +67,64 @@ public class DecisionEngineSpringBinding {
   }
 
   @Bean
-  TenantScopedRuleEvaluators evaluators(RulesetSource source, ValkeyFactWindowStore store) {
-    return new TenantScopedRuleEvaluators(source, store);
+  TenantScopedRuleEvaluators evaluators(
+      RulesetSource source,
+      ValkeyFactWindowStore store,
+      @Value("${decision-engine.cache.maximum-tenants:256}") int maximumTenants,
+      @Value("${decision-engine.cache.rules-per-tenant:100}") int rulesPerTenant,
+      @Value("${decision-engine.evaluation.maximum-rule-firings:10000}") int maxFirings) {
+    return new TenantScopedRuleEvaluators(
+        source, store, maximumTenants, rulesPerTenant, maxFirings);
   }
 
   @Bean
-  TenantExecution tenantExecution(TenantScope tenantScope) {
-    return new TenantExecution(tenantScope);
+  TenantExecution tenantExecution(
+      TenantScope tenantScope,
+      com.forwardmeasure.jpa.liquibase.TenantDatabaseResolver tenants,
+      @Value("${decision-engine.tenant-resolution.issuer:}") String issuer,
+      @Value("${decision-engine.tenant-resolution.organization-client-id:decisionengine}")
+          String clientId,
+      @Value("${decision-engine.authorization.client-secret:}") String secret) {
+    if (secret.isBlank())
+      throw new IllegalStateException("Decision authorization client secret is required");
+    var authorization =
+        com.forwardmeasure.authzen.client.AuthzenAuthorizationFactory.create(
+            new ObjectMapper(),
+            java.net.URI.create(issuer),
+            clientId,
+            secret,
+            java.time.Duration.ofSeconds(5),
+            java.time.Duration.ofSeconds(1),
+            1000,
+            "1");
+    return new TenantExecution(tenantScope, tenants, authorization);
   }
 
-  /**
-   * {@code trusting} (the default) is correct only for decision-engine's current internal-only
-   * (ClusterIP) deployment, where every caller has already resolved real tenant identity upstream
-   * through its own verified flow before calling decision-engine at all - see {@link
-   * TrustingMetadataTenantResolver}'s own javadoc. {@code verified} is for a future standalone
-   * deployment reachable outside that trust boundary - see {@link VerifiedJwtTenantResolver}. This
-   * was a deliberate, already-made decision this session, not something to second-guess here.
-   */
   @Bean
   TenantIdResolver tenantIdResolver(
-      @Value("${decision-engine.tenant-resolution.mode:trusting}") String mode,
+      @Value("${decision-engine.tenant-resolution.mode:verified}") String mode,
       @Value("${decision-engine.tenant-resolution.jwks-uri:}") String jwksUri,
       @Value("${decision-engine.tenant-resolution.issuer:}") String issuer,
-      @Value("${decision-engine.tenant-resolution.organization-client-id:}")
-          String organizationClientId) {
-    if ("verified".equalsIgnoreCase(mode)) {
-      return new VerifiedJwtTenantResolver(
-          requireForVerifiedMode(jwksUri, "decision-engine.tenant-resolution.jwks-uri"),
-          requireForVerifiedMode(issuer, "decision-engine.tenant-resolution.issuer"),
-          requireForVerifiedMode(
-              organizationClientId, "decision-engine.tenant-resolution.organization-client-id"));
-    }
-    return new TrustingMetadataTenantResolver();
-  }
-
-  private static String requireForVerifiedMode(String value, String propertyName) {
-    if (value == null || value.isBlank()) {
+      @Value("${decision-engine.tenant-resolution.organization-client-id:decisionengine}")
+          String clientId,
+      @Value("${decision-engine.tenant-resolution.audience:decision-engine-api}") String audience) {
+    if (!"verified".equals(mode)) {
       throw new IllegalStateException(
-          propertyName + " is required when decision-engine.tenant-resolution.mode=verified");
+          "Production decision-engine requires verified tenant identity");
     }
-    return value;
+    return new VerifiedJwtTenantResolver(jwksUri, issuer, clientId, audience);
   }
 
   @Bean
   @GlobalServerInterceptor
-  ServerInterceptor tenantInterceptor(TenantIdResolver resolver) {
-    return new TenantContextServerInterceptor(resolver);
+  ServerInterceptor tenantInterceptor(
+      TenantIdResolver resolver,
+      javax.sql.DataSource controlPlane,
+      ValkeyFactWindowStore store,
+      TenantExecution execution) {
+    return new TenantContextServerInterceptor(
+        resolver,
+        () -> TenantContextServerInterceptor.dependenciesHealthy(controlPlane, store::isHealthy));
   }
 
   @Bean

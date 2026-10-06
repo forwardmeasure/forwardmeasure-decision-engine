@@ -10,7 +10,6 @@ package com.forwardmeasure.decisionengine.grpc;
 import com.forwardmeasure.decisionengine.contract.v1.EvaluationRequest;
 import com.forwardmeasure.decisionengine.contract.v1.EvaluationResponse;
 import com.forwardmeasure.decisionengine.contract.v1.EvaluationServiceGrpc;
-import com.forwardmeasure.decisionengine.core.DroolsRuleEvaluator;
 import com.forwardmeasure.decisionengine.domain.EvaluationInput;
 import com.forwardmeasure.decisionengine.domain.EvaluationOutcome;
 import com.forwardmeasure.decisionengine.domain.RuleEvaluationException;
@@ -25,6 +24,8 @@ import java.util.regex.Pattern;
 import org.slf4j.MDC;
 
 public class EvaluationServiceImpl extends EvaluationServiceGrpc.EvaluationServiceImplBase {
+  private static final org.slf4j.Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(EvaluationServiceImpl.class);
   private static final Pattern RULESET_PATTERN =
       Pattern.compile("^[a-z][a-zA-Z0-9]*(/[a-z][a-zA-Z0-9]*)*$");
   private final TenantScopedRuleEvaluators evaluators;
@@ -39,6 +40,7 @@ public class EvaluationServiceImpl extends EvaluationServiceGrpc.EvaluationServi
   @Override
   public void evaluate(EvaluationRequest request, StreamObserver<EvaluationResponse> observer) {
     String correlationId = request.getCorrelationId();
+    String previousCorrelation = MDC.get("correlation_id");
     if (correlationId != null && !correlationId.isBlank()) MDC.put("correlation_id", correlationId);
     try {
       if (request.getRuleset().isBlank() || !request.hasInput()) {
@@ -49,18 +51,24 @@ public class EvaluationServiceImpl extends EvaluationServiceGrpc.EvaluationServi
       if (!RULESET_PATTERN.matcher(request.getRuleset()).matches()) {
         throw Status.INVALID_ARGUMENT.withDescription("invalid ruleset name").asRuntimeException();
       }
+      if (request.hasRulesetVersion() && request.getRulesetVersion() <= 0) {
+        throw Status.INVALID_ARGUMENT
+            .withDescription("ruleset_version must be positive")
+            .asRuntimeException();
+      }
       TenantId tenantId = TenantContext.required();
-      DroolsRuleEvaluator evaluator = evaluators.forTenant(tenantId);
       EvaluationOutcome outcome =
           tenantExecution.call(
               tenantId,
               () ->
-                  evaluator.evaluate(
-                      new EvaluationInput(
-                          request.getRuleset(),
-                          request.hasRulesetVersion() ? request.getRulesetVersion() : null,
-                          ProtoStructMapper.toMap(request.getInput()),
-                          request.getSessionKey())));
+                  evaluators
+                      .forTenant(tenantId)
+                      .evaluate(
+                          new EvaluationInput(
+                              request.getRuleset(),
+                              request.hasRulesetVersion() ? request.getRulesetVersion() : null,
+                              ProtoStructMapper.toMap(request.getInput()),
+                              request.getSessionKey())));
       com.google.protobuf.Struct result;
       try {
         result = ProtoStructMapper.toStruct(outcome.result());
@@ -85,6 +93,11 @@ public class EvaluationServiceImpl extends EvaluationServiceGrpc.EvaluationServi
       observer.onError(
           Status.NOT_FOUND.withDescription(exception.getMessage()).asRuntimeException());
     } catch (RuleEvaluationException exception) {
+      LOG.warn(
+          "Decision evaluation failed for ruleset {} (correlation {})",
+          request.getRuleset(),
+          correlationId,
+          exception);
       observer.onError(map(exception));
     } catch (IllegalArgumentException exception) {
       observer.onError(
@@ -92,13 +105,19 @@ public class EvaluationServiceImpl extends EvaluationServiceGrpc.EvaluationServi
     } catch (io.grpc.StatusRuntimeException exception) {
       observer.onError(exception);
     } catch (RuntimeException exception) {
+      LOG.error(
+          "Unexpected decision evaluation failure for ruleset {} (correlation {})",
+          request.getRuleset(),
+          correlationId,
+          exception);
       observer.onError(
           Status.INTERNAL
               .withDescription("unexpected evaluation failure")
               .withCause(exception)
               .asRuntimeException());
     } finally {
-      if (correlationId != null && !correlationId.isBlank()) MDC.remove("correlation_id");
+      if (previousCorrelation == null) MDC.remove("correlation_id");
+      else MDC.put("correlation_id", previousCorrelation);
     }
   }
 

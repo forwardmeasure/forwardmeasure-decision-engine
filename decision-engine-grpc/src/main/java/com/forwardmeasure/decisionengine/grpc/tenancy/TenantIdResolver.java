@@ -10,17 +10,16 @@ package com.forwardmeasure.decisionengine.grpc.tenancy;
 import com.forwardmeasure.jpa.tenancy.TenantId;
 import io.grpc.Metadata;
 
-/**
- * Resolves the tenant a gRPC call belongs to. Two real implementations, chosen per deployment by
- * whichever trust boundary that deployment actually has - see {@link
- * TrustingMetadataTenantResolver} (internal-only deployments, caller already resolved tenant
- * identity upstream) and {@link VerifiedJwtTenantResolver} (standalone deployments, reachable by
- * callers outside a boundary decision-engine controls itself).
- */
+/** Resolves call identity. Production bindings require signed organization claims. */
 @FunctionalInterface
 public interface TenantIdResolver {
   /**
    * @throws TenantResolutionException if the call cannot be attributed to a tenant
    */
   TenantId resolve(Metadata headers);
+
+  /** A default for legacy fixtures; production resolvers must supply the verified identity. */
+  default com.forwardmeasure.authzen.ActiveOrganization resolveOrganization(Metadata headers) {
+    return null;
+  }
 }

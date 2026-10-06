@@ -1,3 +1,8 @@
+> **2026-10-06 amendment:** the [rehabilitation handover](rehabilitation/fde-rehabilitation-handover-2026-10-06.md)
+> supersedes this document's unsigned internal-caller trust model, version allocation, cache/window
+> lifecycle and deployment-readiness claims. Production requires verified organization tokens plus
+> AuthZEN capabilities on every framework. Read that amendment before implementing or deploying.
+
 # forwardmeasure-decision-engine — Implementation Specification
 
 **Audience: an autonomous coding agent (Codex) building this repository from scratch.**

@@ -1,0 +1,28 @@
+document:
+  dsl: '1.0.3'
+  namespace: fde
+  name: evaluate-decision
+  version: '1.0.0'
+use:
+  secrets:
+    - decision-engine-token
+do:
+  - evaluate:
+      call: grpc
+      with:
+        proto:
+          endpoint: "@BUNDLE_DID@/evaluation.proto"
+        service:
+          name: forwardmeasure.decisionengine.v1.EvaluationService
+          host: "@FDE_HOST@"
+          port: 9000
+          authentication:
+            bearer:
+              use: decision-engine-token
+        method: Evaluate
+        arguments:
+          ruleset: ${ .ruleset }
+          rulesetVersion: ${ .rulesetVersion }
+          input: ${ .input }
+          sessionKey: ${ .sessionKey // "" }
+          correlationId: ${ .correlationId // "" }

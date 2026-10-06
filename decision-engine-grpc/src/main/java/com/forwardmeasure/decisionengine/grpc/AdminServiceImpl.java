@@ -41,7 +41,7 @@ public class AdminServiceImpl
   }
 
   private RuleEngineAdmin admin() {
-    return evaluators.forTenant(TenantContext.required());
+    return tenantExecution.call(() -> evaluators.forTenant(TenantContext.required()));
   }
 
   @Override
@@ -68,7 +68,11 @@ public class AdminServiceImpl
 
   @Override
   public void getCacheStatus(GetCacheStatusRequest request, StreamObserver<CacheStatus> observer) {
-    respondCache(observer, admin().cacheStatus());
+    try {
+      respondCache(observer, admin().cacheStatus());
+    } catch (RuntimeException exception) {
+      fail(observer, exception);
+    }
   }
 
   @Override
@@ -132,6 +136,10 @@ public class AdminServiceImpl
   }
 
   private static void fail(StreamObserver<?> observer, RuntimeException exception) {
+    if (exception instanceof io.grpc.StatusRuntimeException statusFailure) {
+      observer.onError(statusFailure);
+      return;
+    }
     Status status =
         exception instanceof RulesetNotFoundException
             ? Status.NOT_FOUND
@@ -139,6 +147,12 @@ public class AdminServiceImpl
                 ? Status.INVALID_ARGUMENT
                 : Status.INTERNAL;
     observer.onError(
-        status.withDescription(exception.getMessage()).withCause(exception).asRuntimeException());
+        status
+            .withDescription(
+                status == Status.INTERNAL
+                    ? "Decision administration failed"
+                    : exception.getMessage())
+            .withCause(exception)
+            .asRuntimeException());
   }
 }

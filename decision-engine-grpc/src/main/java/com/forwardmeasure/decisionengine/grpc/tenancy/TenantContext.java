@@ -26,6 +26,10 @@ import io.grpc.Context;
 public final class TenantContext {
   public static final Context.Key<TenantId> KEY = Context.key("decision-engine-tenant-id");
 
+  public static final Context.Key<com.forwardmeasure.authzen.ActiveOrganization> ORGANIZATION =
+      Context.key("decision-engine-organization");
+  public static final Context.Key<String> METHOD = Context.key("decision-engine-method");
+
   private TenantContext() {}
 
   /** The current call's resolved tenant, or empty if none was attached (e.g. outside an RPC). */

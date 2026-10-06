@@ -1,0 +1,14 @@
+schemaVersion: 1
+packId: decision-engine
+packVersion: "1"
+clientId: decisionengine
+roles: [decision-evaluator, decision-author, decision-administrator]
+resources:
+  - type: decision-engine
+    id: rulesets
+    scopes: [decision:evaluate, decision:manage, decision:admin]
+scopes: [decision:evaluate, decision:manage, decision:admin]
+roleGrants:
+  decision-evaluator: [decision:evaluate]
+  decision-author: [decision:evaluate, decision:manage]
+  decision-administrator: [decision:evaluate, decision:manage, decision:admin]

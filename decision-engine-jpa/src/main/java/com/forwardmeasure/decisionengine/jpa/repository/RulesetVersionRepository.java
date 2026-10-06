@@ -49,15 +49,29 @@ public class RulesetVersionRepository extends AbstractBaseRepository<RulesetVers
         .getResultList();
   }
 
+  /** Serialize create/activation/deletion, including the first version when no row exists. */
+  public void lockRuleset(String ruleset) {
+    entityManager()
+        .createNativeQuery(
+            "select 1 from pg_advisory_xact_lock(hashtextextended(current_database() || ':' ||"
+                + " current_schema() || ':' || :ruleset, 0))",
+            Integer.class)
+        .setParameter("ruleset", ruleset)
+        .getSingleResult();
+  }
+
+  /** Durable counter: deleting the largest version must never reuse its cache/window identity. */
   public long nextVersion(String ruleset) {
-    return entityManager()
-            .createQuery(
-                "select coalesce(max(r.rulesetVersion), 0) from RulesetVersionEntity r where"
-                    + " r.ruleset = :ruleset",
-                Long.class)
-            .setParameter("ruleset", ruleset)
-            .getSingleResult()
-        + 1;
+    return ((Number)
+            entityManager()
+                .createNativeQuery(
+                    "insert into ruleset_version_counter (ruleset, next_version) values (:ruleset,"
+                        + " 2) on conflict (ruleset) do update set next_version ="
+                        + " ruleset_version_counter.next_version + 1 returning next_version - 1",
+                    Long.class)
+                .setParameter("ruleset", ruleset)
+                .getSingleResult())
+        .longValue();
   }
 
   public List<RulesetVersionEntity> findActiveForUpdate(String ruleset) {

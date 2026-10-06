@@ -73,3 +73,21 @@ factWindow:
     # The shared Valkey's password in this namespace (shared platform.secrets.decisionEngineValkey).
     credentialsSecret: {{ .Values.factWindow.valkey.external.credentialsSecret | default .Values.platform.secrets.decisionEngineValkey | quote }}
     {{- end }}
+
+# Shared verified identity and AuthZEN contract for all framework assemblies.
+extraEnv:
+  - name: DECISION_ENGINE_TENANT_RESOLUTION_MODE
+    value: verified
+  - name: DECISION_ENGINE_TENANT_RESOLUTION_ISSUER
+    value: {{ .Values.platform.endpoints.keycloak.issuer | quote }}
+  - name: DECISION_ENGINE_TENANT_RESOLUTION_JWKS_URI
+    value: {{ printf "%s/protocol/openid-connect/certs" .Values.platform.endpoints.keycloak.issuer | quote }}
+  - name: DECISION_ENGINE_TENANT_RESOLUTION_ORGANIZATION_CLIENT_ID
+    value: {{ .Values.platform.identity.serviceClients.decisionEngine.clientId | quote }}
+  - name: DECISION_ENGINE_TENANT_RESOLUTION_AUDIENCE
+    value: decision-engine-api
+  - name: DECISION_ENGINE_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: decision-engine-identity-credentials
+        key: DECISION_ENGINE_CLIENT_SECRET

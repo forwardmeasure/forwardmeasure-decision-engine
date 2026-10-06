@@ -49,7 +49,14 @@ public class ManagementServiceImpl
                       mode(request.getMode()),
                       request.getMaxWindowSize(),
                       request.getIdleTimeoutSeconds(),
-                      request.getCreatedBy(),
+                      com.forwardmeasure.decisionengine.grpc.tenancy.TenantContext.ORGANIZATION
+                                  .get()
+                              == null
+                          ? request.getCreatedBy()
+                          : com.forwardmeasure.decisionengine.grpc.tenancy.TenantContext
+                              .ORGANIZATION
+                              .get()
+                              .actorId(),
                       request.getActivate()));
       observer.onNext(wire(created));
       observer.onCompleted();
@@ -81,7 +88,8 @@ public class ManagementServiceImpl
       var builder =
           ListRulesetVersionsResponse.newBuilder()
               .addAllItems(items.stream().map(ManagementServiceImpl::wire).toList());
-      if (!items.isEmpty() && request.getLimit() > 0 && items.size() == request.getLimit())
+      int effectiveLimit = request.getLimit() <= 0 ? 100 : Math.min(request.getLimit(), 500);
+      if (!items.isEmpty() && items.size() == effectiveLimit)
         builder.setNextCursor(Long.toString(items.get(items.size() - 1).version()));
       observer.onNext(builder.build());
       observer.onCompleted();
@@ -150,6 +158,10 @@ public class ManagementServiceImpl
   }
 
   private static void fail(StreamObserver<?> observer, RuntimeException exception) {
+    if (exception instanceof io.grpc.StatusRuntimeException statusFailure) {
+      observer.onError(statusFailure);
+      return;
+    }
     Status status =
         exception instanceof DrlCompilationException
             ? Status.INVALID_ARGUMENT
@@ -161,6 +173,10 @@ public class ManagementServiceImpl
                         ? Status.INVALID_ARGUMENT
                         : Status.INTERNAL;
     observer.onError(
-        status.withDescription(exception.getMessage()).withCause(exception).asRuntimeException());
+        status
+            .withDescription(
+                status == Status.INTERNAL ? "Ruleset management failed" : exception.getMessage())
+            .withCause(exception)
+            .asRuntimeException());
   }
 }

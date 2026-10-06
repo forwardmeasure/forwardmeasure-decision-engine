@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.LongAdder;
 import org.kie.api.event.rule.AfterMatchFiredEvent;
+import org.kie.api.event.rule.BeforeMatchFiredEvent;
 import org.kie.api.event.rule.DefaultAgendaEventListener;
 import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
@@ -34,11 +35,22 @@ public final class DroolsRuleEvaluator implements RuleEvaluator, RuleEngineAdmin
 
   private record CacheKey(String ruleset, long version) {}
 
+  private static final class CompiledRules {
+    final KieContainer container;
+    int users;
+    boolean retired;
+
+    CompiledRules(KieContainer container) {
+      this.container = container;
+    }
+  }
+
   private final RulesetSource rulesetSource;
   private final FactWindowStore factWindowStore;
   private final DrlCompiler compiler;
   private final int cacheCapacity;
-  private final Map<CacheKey, KieContainer> containers;
+  private final int maxRuleFirings;
+  private final Map<CacheKey, CompiledRules> containers;
   private final LongAdder invocationCount = new LongAdder();
   private final LongAdder successCount = new LongAdder();
   private final LongAdder failureCount = new LongAdder();
@@ -57,6 +69,18 @@ public final class DroolsRuleEvaluator implements RuleEvaluator, RuleEngineAdmin
       FactWindowStore factWindowStore,
       DrlCompiler compiler,
       int cacheCapacity) {
+    this(rulesetSource, factWindowStore, compiler, cacheCapacity, 10000);
+  }
+
+  public DroolsRuleEvaluator(
+      RulesetSource rulesetSource,
+      FactWindowStore factWindowStore,
+      DrlCompiler compiler,
+      int cacheCapacity,
+      int maxRuleFirings) {
+    if (maxRuleFirings < 1 || maxRuleFirings == Integer.MAX_VALUE)
+      throw new IllegalArgumentException("Invalid maximum rule firings");
+    this.maxRuleFirings = maxRuleFirings;
     this.rulesetSource = Objects.requireNonNull(rulesetSource, "rulesetSource");
     this.factWindowStore = factWindowStore;
     this.compiler = Objects.requireNonNull(compiler, "compiler");
@@ -101,12 +125,27 @@ public final class DroolsRuleEvaluator implements RuleEvaluator, RuleEngineAdmin
           "STATEFUL ruleset called without a session_key");
     }
     KieSession session = null;
+    CompiledRules compiled = null;
     try {
-      KieContainer container = getOrCompile(version);
-      session = container.newKieSession();
+      synchronized (containers) {
+        compiled = getOrCompile(version);
+        session = compiled.container.newKieSession();
+        compiled.users++;
+      }
       List<String> firedRules = new ArrayList<>();
       session.addEventListener(
           new DefaultAgendaEventListener() {
+            @Override
+            public void beforeMatchFired(BeforeMatchFiredEvent event) {
+              if (firedRules.size() >= maxRuleFirings) {
+                throw new RuleEvaluationException(
+                    input.ruleset(),
+                    version.version(),
+                    RuleEvaluationException.Reason.EVALUATION_FAILURE,
+                    "Rule firing limit exceeded");
+              }
+            }
+
             @Override
             public void afterMatchFired(AfterMatchFiredEvent event) {
               firedRules.add(event.getMatch().getRule().getName());
@@ -154,7 +193,9 @@ public final class DroolsRuleEvaluator implements RuleEvaluator, RuleEngineAdmin
         facts = List.of(input.facts());
       }
       facts.forEach(session::insert);
-      session.fireAllRules();
+      // The before-match listener rejects an excess activation before executing its consequence.
+      // One extra activation is requested only to distinguish an exact-limit success from overflow.
+      session.fireAllRules(maxRuleFirings + 1);
       if (result.get("outcome") == null) {
         throw new RuleEvaluationException(
             input.ruleset(),
@@ -164,7 +205,10 @@ public final class DroolsRuleEvaluator implements RuleEvaluator, RuleEngineAdmin
       }
       EvaluationOutcome outcome =
           new EvaluationOutcome(
-              Map.copyOf(result), List.copyOf(firedRules), version.version(), facts.size());
+              java.util.Collections.unmodifiableMap(new HashMap<>(result)),
+              List.copyOf(firedRules),
+              version.version(),
+              facts.size());
       successCount.increment();
       return outcome;
     } catch (RuleEvaluationException exception) {
@@ -178,30 +222,43 @@ public final class DroolsRuleEvaluator implements RuleEvaluator, RuleEngineAdmin
           exception);
     } finally {
       if (session != null) {
-        session.dispose();
+        try {
+          session.dispose();
+        } finally {
+          synchronized (containers) {
+            compiled.users--;
+            if (compiled.retired && compiled.users == 0) compiler.release(compiled.container);
+          }
+        }
       }
     }
   }
 
-  private KieContainer getOrCompile(RulesetVersion version) {
+  private CompiledRules getOrCompile(RulesetVersion version) {
     CacheKey key = new CacheKey(version.ruleset(), version.version());
     synchronized (containers) {
-      KieContainer cached = containers.get(key);
+      CompiledRules cached = containers.get(key);
       if (cached != null) {
         cacheHitCount.increment();
         return cached;
       }
       cacheMissCount.increment();
       long started = System.nanoTime();
-      KieContainer compiled = compiler.compile(version.ruleset(), version.version(), version.drl());
+      CompiledRules compiled =
+          new CompiledRules(compiler.compile(version.ruleset(), version.version(), version.drl()));
       totalCompilationNanos.add(System.nanoTime() - started);
       containers.put(key, compiled);
       if (containers.size() > cacheCapacity) {
-        containers.remove(containers.keySet().iterator().next());
+        retire(containers.remove(containers.keySet().iterator().next()));
         cacheEvictionCount.increment();
       }
       return compiled;
     }
+  }
+
+  private void retire(CompiledRules rules) {
+    rules.retired = true;
+    if (rules.users == 0) compiler.release(rules.container);
   }
 
   @Override
@@ -232,13 +289,16 @@ public final class DroolsRuleEvaluator implements RuleEvaluator, RuleEngineAdmin
   @Override
   public boolean unload(String ruleset, long version) {
     synchronized (containers) {
-      return containers.remove(new CacheKey(ruleset, version)) != null;
+      CompiledRules removed = containers.remove(new CacheKey(ruleset, version));
+      if (removed != null) retire(removed);
+      return removed != null;
     }
   }
 
   @Override
   public void clearCache() {
     synchronized (containers) {
+      containers.values().forEach(this::retire);
       containers.clear();
     }
   }

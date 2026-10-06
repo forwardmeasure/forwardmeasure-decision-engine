@@ -25,7 +25,9 @@ import com.forwardmeasure.decisionengine.contract.v1.RuntimeStatistics;
 import com.forwardmeasure.decisionengine.contract.v1.UnloadRulesetRequest;
 import com.forwardmeasure.decisionengine.contract.v1.WarmRulesetRequest;
 import com.forwardmeasure.decisionengine.core.DrlCompiler;
+import com.forwardmeasure.decisionengine.domain.RulesetMode;
 import com.forwardmeasure.decisionengine.domain.RulesetSource;
+import com.forwardmeasure.decisionengine.domain.RulesetVersion;
 import com.forwardmeasure.decisionengine.factwindow.ValkeyFactWindowStore;
 import com.forwardmeasure.decisionengine.grpc.AdminServiceImpl;
 import com.forwardmeasure.decisionengine.grpc.EvaluationServiceImpl;
@@ -34,7 +36,6 @@ import com.forwardmeasure.decisionengine.grpc.tenancy.TenantContextServerInterce
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantExecution;
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantIdResolver;
 import com.forwardmeasure.decisionengine.grpc.tenancy.TenantScopedRuleEvaluators;
-import com.forwardmeasure.decisionengine.grpc.tenancy.TrustingMetadataTenantResolver;
 import com.forwardmeasure.decisionengine.grpc.tenancy.VerifiedJwtTenantResolver;
 import com.forwardmeasure.decisionengine.jpa.application.RulesetVersionService;
 import com.forwardmeasure.decisionengine.jpa.repository.RulesetVersionRepository;
@@ -50,6 +51,7 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import java.util.List;
 import java.util.Optional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -63,10 +65,56 @@ public class DecisionEngineQuarkusBinding {
     return repository;
   }
 
-  @Produces
+  /**
+   * Managed bean ensures the service transaction completes inside TenantExecution, before a reply.
+   */
   @ApplicationScoped
-  RulesetVersionService rulesetVersionService(RulesetVersionRepository repository) {
-    return new RulesetVersionServiceImpl(repository, new DrlCompiler());
+  @Transactional
+  public static class TransactionalRulesets implements RulesetVersionService {
+    private final RulesetVersionService delegate;
+
+    @jakarta.inject.Inject
+    public TransactionalRulesets(RulesetVersionRepository repository) {
+      delegate = new RulesetVersionServiceImpl(repository, new DrlCompiler());
+    }
+
+    @Override
+    public RulesetVersion create(
+        String ruleset,
+        String drl,
+        RulesetMode mode,
+        int maxWindowSize,
+        int idleTimeoutSeconds,
+        String createdBy,
+        boolean activate) {
+      return delegate.create(
+          ruleset, drl, mode, maxWindowSize, idleTimeoutSeconds, createdBy, activate);
+    }
+
+    @Override
+    public RulesetVersion getActive(String ruleset) {
+      return delegate.getActive(ruleset);
+    }
+
+    @Override
+    public RulesetVersion get(String ruleset, long version) {
+      return delegate.get(ruleset, version);
+    }
+
+    @Override
+    public List<RulesetVersion> list(String ruleset, String cursor, int limit) {
+      return delegate.list(ruleset, cursor, limit);
+    }
+
+    @Override
+    public RulesetVersion activate(String ruleset, long version) {
+      return delegate.activate(ruleset, version);
+    }
+
+    @Override
+    public boolean delete(String ruleset, long version) {
+      return delegate.delete(ruleset, version);
+    }
   }
 
   @Produces
@@ -86,51 +134,81 @@ public class DecisionEngineQuarkusBinding {
 
   @Produces
   @ApplicationScoped
-  TenantScopedRuleEvaluators evaluators(RulesetSource source, ValkeyFactWindowStore store) {
-    return new TenantScopedRuleEvaluators(source, store);
+  TenantScopedRuleEvaluators evaluators(
+      RulesetSource source,
+      ValkeyFactWindowStore store,
+      @ConfigProperty(name = "decision-engine.cache.maximum-tenants", defaultValue = "256")
+          int maximumTenants,
+      @ConfigProperty(name = "decision-engine.cache.rules-per-tenant", defaultValue = "100")
+          int rulesPerTenant,
+      @ConfigProperty(
+              name = "decision-engine.evaluation.maximum-rule-firings",
+              defaultValue = "10000")
+          int maxFirings) {
+    return new TenantScopedRuleEvaluators(
+        source, store, maximumTenants, rulesPerTenant, maxFirings);
   }
 
   @Produces
   @ApplicationScoped
-  TenantExecution tenantExecution(TenantScope tenantScope) {
-    return new TenantExecution(tenantScope);
+  @io.quarkus.runtime.Startup
+  TenantExecution tenantExecution(
+      TenantScope tenantScope,
+      com.forwardmeasure.jpa.liquibase.TenantDatabaseResolver tenants,
+      @ConfigProperty(name = "decision-engine.tenant-resolution.issuer", defaultValue = "")
+          String issuer,
+      @ConfigProperty(
+              name = "decision-engine.tenant-resolution.organization-client-id",
+              defaultValue = "decisionengine")
+          String clientId,
+      @ConfigProperty(name = "decision-engine.authorization.client-secret", defaultValue = "")
+          String secret) {
+    if (secret.isBlank())
+      throw new IllegalStateException("Decision authorization client secret is required");
+    var authorization =
+        com.forwardmeasure.authzen.client.AuthzenAuthorizationFactory.create(
+            new ObjectMapper(),
+            java.net.URI.create(issuer),
+            clientId,
+            secret,
+            java.time.Duration.ofSeconds(5),
+            java.time.Duration.ofSeconds(1),
+            1000,
+            "1");
+    return new TenantExecution(tenantScope, tenants, authorization);
   }
 
-  /**
-   * {@code trusting} (the default) is correct only for decision-engine's current internal-only
-   * (ClusterIP) deployment, where every caller has already resolved real tenant identity upstream
-   * through its own verified flow before calling decision-engine at all - see {@link
-   * TrustingMetadataTenantResolver}'s own javadoc. {@code verified} is for a future standalone
-   * deployment reachable outside that trust boundary - see {@link VerifiedJwtTenantResolver}. This
-   * was a deliberate, already-made decision this session, not something to second-guess here.
-   */
   @Produces
   @ApplicationScoped
+  @io.quarkus.runtime.Startup
   TenantIdResolver tenantIdResolver(
-      @ConfigProperty(name = "decision-engine.tenant-resolution.mode", defaultValue = "trusting")
+      @ConfigProperty(name = "decision-engine.tenant-resolution.mode", defaultValue = "verified")
           String mode,
-      @ConfigProperty(name = "decision-engine.tenant-resolution.jwks-uri") Optional<String> jwksUri,
-      @ConfigProperty(name = "decision-engine.tenant-resolution.issuer") Optional<String> issuer,
-      @ConfigProperty(name = "decision-engine.tenant-resolution.organization-client-id")
-          Optional<String> organizationClientId) {
-    if ("verified".equalsIgnoreCase(mode)) {
-      return new VerifiedJwtTenantResolver(
-          requireForVerifiedMode(jwksUri, "decision-engine.tenant-resolution.jwks-uri"),
-          requireForVerifiedMode(issuer, "decision-engine.tenant-resolution.issuer"),
-          requireForVerifiedMode(
-              organizationClientId, "decision-engine.tenant-resolution.organization-client-id"));
+      @ConfigProperty(name = "decision-engine.tenant-resolution.jwks-uri", defaultValue = "")
+          String jwksUri,
+      @ConfigProperty(name = "decision-engine.tenant-resolution.issuer", defaultValue = "")
+          String issuer,
+      @ConfigProperty(
+              name = "decision-engine.tenant-resolution.organization-client-id",
+              defaultValue = "decisionengine")
+          String clientId,
+      @ConfigProperty(
+              name = "decision-engine.tenant-resolution.audience",
+              defaultValue = "decision-engine-api")
+          String audience) {
+    if (!"verified".equals(mode)) {
+      throw new IllegalStateException(
+          "Production decision-engine requires verified tenant identity");
     }
-    return new TrustingMetadataTenantResolver();
+    return new VerifiedJwtTenantResolver(jwksUri, issuer, clientId, audience);
   }
 
-  private static String requireForVerifiedMode(Optional<String> value, String propertyName) {
-    return value
-        .filter(v -> !v.isBlank())
-        .orElseThrow(
-            () ->
-                new IllegalStateException(
-                    propertyName
-                        + " is required when decision-engine.tenant-resolution.mode=verified"));
+  void closeWindow(@jakarta.enterprise.inject.Disposes ValkeyFactWindowStore store) {
+    store.close();
+  }
+
+  void closeEvaluators(@jakarta.enterprise.inject.Disposes TenantScopedRuleEvaluators evaluators) {
+    evaluators.close();
   }
 
   /**
@@ -144,8 +222,12 @@ public class DecisionEngineQuarkusBinding {
   @GlobalInterceptor
   public static class QuarkusTenantInterceptor extends TenantContextServerInterceptor {
     @jakarta.inject.Inject
-    public QuarkusTenantInterceptor(TenantIdResolver resolver) {
-      super(resolver);
+    public QuarkusTenantInterceptor(
+        TenantIdResolver resolver,
+        javax.sql.DataSource controlPlane,
+        ValkeyFactWindowStore store,
+        TenantExecution execution) {
+      super(resolver, () -> dependenciesHealthy(controlPlane, store::isHealthy));
     }
   }
 
@@ -220,7 +302,6 @@ public class DecisionEngineQuarkusBinding {
 
     @Override
     @Blocking
-    @Transactional
     public void createRulesetVersion(
         CreateRulesetVersionRequest request,
         StreamObserver<com.forwardmeasure.decisionengine.contract.v1.RulesetVersion> observer) {
@@ -229,7 +310,6 @@ public class DecisionEngineQuarkusBinding {
 
     @Override
     @Blocking
-    @Transactional
     public void getActiveRulesetVersion(
         GetActiveRulesetVersionRequest request,
         StreamObserver<com.forwardmeasure.decisionengine.contract.v1.RulesetVersion> observer) {
@@ -238,7 +318,6 @@ public class DecisionEngineQuarkusBinding {
 
     @Override
     @Blocking
-    @Transactional
     public void listRulesetVersions(
         ListRulesetVersionsRequest request, StreamObserver<ListRulesetVersionsResponse> observer) {
       super.listRulesetVersions(request, observer);
@@ -246,7 +325,6 @@ public class DecisionEngineQuarkusBinding {
 
     @Override
     @Blocking
-    @Transactional
     public void activateRulesetVersion(
         ActivateRulesetVersionRequest request,
         StreamObserver<com.forwardmeasure.decisionengine.contract.v1.RulesetVersion> observer) {
@@ -255,7 +333,6 @@ public class DecisionEngineQuarkusBinding {
 
     @Override
     @Blocking
-    @Transactional
     public void deleteRulesetVersion(
         DeleteRulesetVersionRequest request,
         StreamObserver<DeleteRulesetVersionResponse> observer) {

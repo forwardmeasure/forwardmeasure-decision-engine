@@ -47,6 +47,7 @@ public class RulesetVersionServiceImpl implements RulesetVersionService {
       String createdBy,
       boolean activate) {
     validate(ruleset, drl, mode, maxWindowSize, idleTimeoutSeconds);
+    repository.lockRuleset(ruleset);
     if (!activate && repository.findActive(ruleset).isEmpty()) {
       throw new IllegalStateException(
           "the first ruleset version must be activated; a ruleset cannot start without an active"
@@ -54,7 +55,7 @@ public class RulesetVersionServiceImpl implements RulesetVersionService {
     }
     long version = repository.nextVersion(ruleset);
     var container = compiler.compile(ruleset, version, drl);
-    container.dispose();
+    compiler.release(container);
     RulesetVersionEntity entity = new RulesetVersionEntity();
     entity.setRuleset(ruleset);
     entity.setRulesetVersion(version);
@@ -94,6 +95,7 @@ public class RulesetVersionServiceImpl implements RulesetVersionService {
   @Transactional
   public List<RulesetVersion> list(String ruleset, String cursor, int limit) {
     long after = cursor == null || cursor.isBlank() ? 0 : Long.parseLong(cursor);
+    if (after < 0) throw new IllegalArgumentException("cursor must be nonnegative");
     int boundedLimit = limit <= 0 ? 100 : Math.min(limit, 500);
     return repository.list(ruleset, after, boundedLimit).stream()
         .map(RulesetVersionMapper.INSTANCE::toDomain)
@@ -103,6 +105,7 @@ public class RulesetVersionServiceImpl implements RulesetVersionService {
   @Override
   @Transactional
   public RulesetVersion activate(String ruleset, long version) {
+    repository.lockRuleset(ruleset);
     RulesetVersionEntity requested =
         repository
             .findVersion(ruleset, version)
@@ -127,6 +130,7 @@ public class RulesetVersionServiceImpl implements RulesetVersionService {
   @Override
   @Transactional
   public boolean delete(String ruleset, long version) {
+    repository.lockRuleset(ruleset);
     RulesetVersionEntity entity =
         repository
             .findVersion(ruleset, version)
@@ -140,7 +144,7 @@ public class RulesetVersionServiceImpl implements RulesetVersionService {
 
   private void validate(
       String ruleset, String drl, RulesetMode mode, int maxWindowSize, int timeout) {
-    if (ruleset == null || !RULESET_PATTERN.matcher(ruleset).matches()) {
+    if (ruleset == null || ruleset.length() > 255 || !RULESET_PATTERN.matcher(ruleset).matches()) {
       throw new IllegalArgumentException("invalid ruleset name");
     }
     if (drl == null || mode == null || RESULT_GLOBAL.matcher(drl).results().count() != 1) {

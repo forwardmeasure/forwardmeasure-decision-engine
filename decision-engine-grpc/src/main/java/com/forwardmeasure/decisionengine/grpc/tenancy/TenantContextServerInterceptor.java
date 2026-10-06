@@ -15,6 +15,8 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,9 +43,18 @@ public class TenantContextServerInterceptor implements ServerInterceptor {
    */
   static final String HEALTH_SERVICE = "grpc.health.v1.Health";
 
+  private final java.util.concurrent.atomic.AtomicBoolean checkingReadiness =
+      new java.util.concurrent.atomic.AtomicBoolean();
   private final TenantIdResolver resolver;
+  private final java.util.function.BooleanSupplier readiness;
 
   public TenantContextServerInterceptor(TenantIdResolver resolver) {
+    this(resolver, null);
+  }
+
+  public TenantContextServerInterceptor(
+      TenantIdResolver resolver, java.util.function.BooleanSupplier readiness) {
+    this.readiness = readiness;
     this.resolver = Objects.requireNonNull(resolver, "resolver");
     LOG.info("Tenant resolution active via {}", resolver.getClass().getSimpleName());
   }
@@ -51,13 +62,19 @@ public class TenantContextServerInterceptor implements ServerInterceptor {
   @Override
   public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
       ServerCall<ReqT, RespT> call, Metadata headers, ServerCallHandler<ReqT, RespT> next) {
+    if (readiness != null
+        && (HEALTH_SERVICE + "/Check").equals(call.getMethodDescriptor().getFullMethodName())) {
+      return health(call);
+    }
     if (HEALTH_SERVICE.equals(call.getMethodDescriptor().getServiceName())) {
       return next.startCall(call, headers);
     }
     String method = call.getMethodDescriptor().getFullMethodName();
     TenantId tenantId;
+    com.forwardmeasure.authzen.ActiveOrganization organization = null;
     try {
-      tenantId = resolver.resolve(headers);
+      organization = resolver.resolveOrganization(headers);
+      tenantId = organization == null ? resolver.resolve(headers) : organization.tenantId();
     } catch (TenantResolutionException failure) {
       LOG.warn(
           "Rejecting {} - tenant resolution failed: {}", method, failure.getMessage(), failure);
@@ -67,7 +84,98 @@ public class TenantContextServerInterceptor implements ServerInterceptor {
       return new ServerCall.Listener<>() {};
     }
     LOG.debug("Resolved {} to tenant {}", method, tenantId);
-    Context context = Context.current().withValue(TenantContext.KEY, tenantId);
+    Context context =
+        Context.current()
+            .withValues(
+                TenantContext.KEY,
+                tenantId,
+                TenantContext.ORGANIZATION,
+                organization,
+                TenantContext.METHOD,
+                method);
     return Contexts.interceptCall(context, call, headers, next);
+  }
+
+  /** Kubelet's readiness is distinct from liveness and checks real dependencies. */
+  private <ReqT, RespT> ServerCall.Listener<ReqT> health(ServerCall<ReqT, RespT> call) {
+    call.request(1);
+    return new ServerCall.Listener<>() {
+      private String service;
+      private boolean invalidRequest;
+
+      @Override
+      public void onMessage(ReqT message) {
+        // Quarkus and grpc-services generate different Java classes for the same health
+        // protocol. Use the registered marshallers at the boundary, never a Java type cast.
+        try (var wire = call.getMethodDescriptor().getRequestMarshaller().stream(message)) {
+          service = io.grpc.health.v1.HealthCheckRequest.parseFrom(wire).getService();
+        } catch (IOException malformed) {
+          invalidRequest = true;
+          call.close(
+              Status.INVALID_ARGUMENT.withDescription("Invalid health request"), new Metadata());
+        }
+      }
+
+      @Override
+      public void onHalfClose() {
+        if (invalidRequest) return;
+        if (service == null) {
+          call.close(
+              Status.INVALID_ARGUMENT.withDescription("Missing health request"), new Metadata());
+          return;
+        }
+        if (!"readiness".equals(service) && !"liveness".equals(service) && !"".equals(service)) {
+          call.close(Status.NOT_FOUND, new Metadata());
+          return;
+        }
+        if ("liveness".equals(service)) {
+          reply(true);
+        } else if (checkingReadiness.compareAndSet(false, true)) {
+          // Dependency I/O must never block Quarkus's transport/event-loop thread. At most one
+          // dependency probe is in flight even when callers time out before a pool does.
+          Thread.startVirtualThread(
+              () -> {
+                boolean serving;
+                try {
+                  serving = readiness.getAsBoolean();
+                } catch (RuntimeException unavailable) {
+                  serving = false;
+                } finally {
+                  checkingReadiness.set(false);
+                }
+                reply(serving);
+              });
+        } else {
+          reply(false);
+        }
+      }
+
+      private void reply(boolean serving) {
+        if (call.isCancelled()) return;
+        var response =
+            io.grpc.health.v1.HealthCheckResponse.newBuilder()
+                .setStatus(
+                    serving
+                        ? io.grpc.health.v1.HealthCheckResponse.ServingStatus.SERVING
+                        : io.grpc.health.v1.HealthCheckResponse.ServingStatus.NOT_SERVING)
+                .build();
+        RespT frameworkResponse =
+            call.getMethodDescriptor()
+                .getResponseMarshaller()
+                .parse(new ByteArrayInputStream(response.toByteArray()));
+        call.sendHeaders(new Metadata());
+        call.sendMessage(frameworkResponse);
+        call.close(Status.OK, new Metadata());
+      }
+    };
+  }
+
+  public static boolean dependenciesHealthy(
+      javax.sql.DataSource controlPlane, java.util.function.BooleanSupplier store) {
+    try (var connection = controlPlane.getConnection()) {
+      return connection.isValid(2) && store.getAsBoolean();
+    } catch (java.sql.SQLException unavailable) {
+      return false;
+    }
   }
 }

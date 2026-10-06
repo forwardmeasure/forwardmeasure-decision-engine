@@ -8,6 +8,7 @@
 package com.forwardmeasure.decisionengine.core;
 
 import java.util.Objects;
+import java.util.UUID;
 import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
 import org.kie.api.builder.KieFileSystem;
@@ -35,22 +36,37 @@ public final class DrlCompiler {
     ReleaseId releaseId =
         kieServices.newReleaseId(
             "com.forwardmeasure.decisionengine",
-            "ruleset-" + Integer.toUnsignedString(Objects.hash(ruleset, version)),
+            // KIE's repository is process-wide, including compilation for other tenants and
+            // validation of definitions. Never reuse an ID based only on a tenant-local name.
+            "ruleset-" + UUID.randomUUID(),
             "1.0.0");
     KieFileSystem fileSystem =
         kieServices
             .newKieFileSystem()
             .generateAndWritePomXML(releaseId)
             .write("src/main/resources/ruleset.drl", drl);
-    KieBuilder builder = kieServices.newKieBuilder(fileSystem).buildAll();
-    if (builder.getResults().hasMessages(Message.Level.ERROR)) {
-      String details =
-          builder.getResults().getMessages(Message.Level.ERROR).stream()
-              .map(Message::getText)
-              .reduce((left, right) -> left + "; " + right)
-              .orElse("unknown compilation error");
-      throw new DrlCompilationException(ruleset, version, details);
+    try {
+      KieBuilder builder = kieServices.newKieBuilder(fileSystem).buildAll();
+      if (builder.getResults().hasMessages(Message.Level.ERROR)) {
+        String details =
+            builder.getResults().getMessages(Message.Level.ERROR).stream()
+                .map(Message::getText)
+                .reduce((left, right) -> left + "; " + right)
+                .orElse("unknown compilation error");
+        throw new DrlCompilationException(ruleset, version, details);
+      }
+      return kieServices.newKieContainer(releaseId);
+    } catch (RuntimeException | Error failure) {
+      kieServices.getRepository().removeKieModule(releaseId);
+      throw failure;
     }
-    return kieServices.newKieContainer(releaseId);
+  }
+
+  public void release(KieContainer container) {
+    try {
+      container.dispose();
+    } finally {
+      kieServices.getRepository().removeKieModule(container.getReleaseId());
+    }
   }
 }

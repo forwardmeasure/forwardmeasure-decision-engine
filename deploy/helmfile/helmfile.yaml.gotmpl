@@ -87,20 +87,24 @@ releases:
     namespace: {{ .Values.platform.namespaces.decisionEngine }}
     chart: valkey/valkey
     version: {{ .Values.chartVersions.valkey | quote }}
-    installed: {{ if eq $valkeyMode "embedded" }}true{{ else }}false{{ end }}
+    installed: {{ and .Values.platform.products.decisionEngine.enabled (eq $valkeyMode "embedded") }}
     labels: {component: fact-window}
+    values:
+      - auth:
+          enabled: true
+          usersExistingSecret: {{ .Values.platform.secrets.decisionEngineValkey | quote }}
+          aclUsers:
+            default:
+              passwordKey: password
+              permissions: "~decision-engine:* &* +@all"
 
   - name: decision-engine
     namespace: {{ .Values.platform.namespaces.decisionEngine }}
     # Local workspace path; forwardmeasure-platform uses the published chart artifact instead.
     chart: ../../../helm-charts/charts/decision-engine-helm-chart/helm-chart-sources
     version: {{ .Values.chartVersions.decisionEngine | quote }}
-    # Defaults true (base/local/dev - always deployable there), overridden false by
-    # gcp-platform-cluster.yaml.gotmpl until its own real database/credentials/Valkey
-    # prerequisites exist for real - see that file's own header comment. Without this gate, that
-    # environment's own real-but-not-yet-functional values would install a non-functional pod
-    # instead of a clean no-op.
-    installed: {{ dig "decisionEngine" "enabled" true .Values }}
+    # One platform-wide opt-in controls service, credentials, migrations and workflow bundle.
+    installed: {{ .Values.platform.products.decisionEngine.enabled }}
     labels: {component: server}
     needs:
       {{- if eq $valkeyMode "embedded" }}
@@ -108,3 +112,35 @@ releases:
       {{- end }}
     values:
       - releases/decision-engine/base.yaml.gotmpl
+
+  {{- if .Values.platform.products.decisionEngine.enabled }}
+  - name: decision-engine-workflow-bundle
+    namespace: {{ .Values.platform.namespaces.openworkflow }}
+    chart: ../../../helm-charts/charts/openworkflow-workflow-bundle-helm-chart/helm-chart-sources
+    needs:
+      - {{ .Values.platform.namespaces.decisionEngine }}/decision-engine
+    values:
+      - domain: fde
+        didMethod: {{ .Values.platform.identity.didMethod | quote }}
+        definitions:
+          evaluate.yaml: |
+{{ readFile "../../decision-engine-api-specifications/src/main/resources/META-INF/decision-engine/workflows/evaluate.yaml" | replace "@FDE_HOST@" (printf "decision-engine.%s.svc.cluster.local" .Values.platform.namespaces.decisionEngine) | indent 12 }}
+        apiDocuments:
+          evaluation.proto: |
+{{ readFile "../../decision-engine-api-specifications/src/main/resources/META-INF/proto/forwardmeasure/decisionengine/v1/evaluation.proto" | indent 12 }}
+        tenants:
+        {{- range .Values.platform.tenants }}
+          - {{ .alias | quote }}
+        {{- end }}
+        registry:
+          apiUrl: {{ .Values.platform.endpoints.registry.apiUrl | quote }}
+        fowf:
+          definitionBaseUrl: {{ .Values.platform.endpoints.openworkflow.definitionBaseUrl | quote }}
+          keycloakTokenUrl: {{ .Values.platform.endpoints.keycloak.tokenUrl | quote }}
+        image:
+          repository: {{ .Values.imageVersions.openworkflowWorkflowPublisher.repository | quote }}
+          tag: {{ .Values.imageVersions.openworkflowWorkflowPublisher.tag | quote }}
+          digest: {{ .Values.imageVersions.openworkflowWorkflowPublisher.digest | quote }}
+        imagePullSecrets:
+          - name: {{ .Values.platform.secrets.imagePull | quote }}
+  {{- end }}

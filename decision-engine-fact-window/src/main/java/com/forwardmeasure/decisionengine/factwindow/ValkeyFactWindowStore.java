@@ -16,6 +16,9 @@ import io.lettuce.core.RedisURI;
 import io.lettuce.core.ScriptOutputType;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,12 +43,18 @@ public final class ValkeyFactWindowStore implements FactWindowStore, AutoCloseab
 
   public ValkeyFactWindowStore(String host, int port, String password, ObjectMapper objectMapper) {
     this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
-    RedisURI.Builder builder = RedisURI.builder().withHost(host).withPort(port);
+    RedisURI.Builder builder =
+        RedisURI.builder().withHost(host).withPort(port).withTimeout(Duration.ofSeconds(5));
     if (password != null && !password.isBlank()) {
       builder.withPassword(password.toCharArray());
     }
     this.client = RedisClient.create(builder.build());
-    this.connection = client.connect();
+    try {
+      this.connection = client.connect();
+    } catch (RuntimeException failure) {
+      client.shutdown();
+      throw failure;
+    }
   }
 
   public ValkeyFactWindowStore(String host, int port, ObjectMapper objectMapper) {
@@ -115,16 +124,30 @@ public final class ValkeyFactWindowStore implements FactWindowStore, AutoCloseab
   }
 
   private static String key(String ruleset, long version, String sessionKey) {
-    return "decision-engine:fact-window:" + ruleset + ":" + version + ":" + sessionKey;
+    // Encode each component separately; delimiters supplied by a caller cannot alias a key.
+    var encoder = Base64.getUrlEncoder().withoutPadding();
+    return "decision-engine:fact-window:v2:"
+        + encoder.encodeToString(ruleset.getBytes(StandardCharsets.UTF_8))
+        + ":"
+        + version
+        + ":"
+        + encoder.encodeToString(sessionKey.getBytes(StandardCharsets.UTF_8));
   }
 
   long ttlSeconds(String ruleset, long version, String sessionKey) {
     return connection.sync().ttl(key(ruleset, version, sessionKey));
   }
 
+  public boolean isHealthy() {
+    return "PONG".equals(connection.sync().ping());
+  }
+
   @Override
   public void close() {
-    connection.close();
-    client.shutdown();
+    try {
+      connection.close();
+    } finally {
+      client.shutdown();
+    }
   }
 }

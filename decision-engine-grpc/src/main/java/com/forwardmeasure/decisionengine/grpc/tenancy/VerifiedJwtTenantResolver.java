@@ -7,6 +7,7 @@
  */
 package com.forwardmeasure.decisionengine.grpc.tenancy;
 
+import com.forwardmeasure.authzen.ActiveOrganization;
 import com.forwardmeasure.authzen.KeycloakOrganizationClaims;
 import com.forwardmeasure.jpa.tenancy.TenantId;
 import com.nimbusds.jose.JWSAlgorithm;
@@ -34,9 +35,7 @@ import java.util.Set;
  * no built-in JWT-verifying filter chain the way JAX-RS/Micronaut Security/Spring Security do on
  * the HTTP side - see this class's own construction site for why).
  *
- * <p>Use this only when decision-engine is reachable by callers outside a trust boundary it
- * controls itself (a standalone deployment) - for the current internal-only deployment, prefer
- * {@link TrustingMetadataTenantResolver}, which needs no token issuance/verification at all.
+ * <p>All production deployments verify tokens, including internal ClusterIP callers.
  */
 public final class VerifiedJwtTenantResolver implements TenantIdResolver {
   private static final Metadata.Key<String> AUTHORIZATION_HEADER =
@@ -55,10 +54,16 @@ public final class VerifiedJwtTenantResolver implements TenantIdResolver {
    */
   public VerifiedJwtTenantResolver(
       String jwksUri, String expectedIssuer, String organizationClientId) {
+    this(jwksUri, expectedIssuer, organizationClientId, organizationClientId);
+  }
+
+  public VerifiedJwtTenantResolver(
+      String jwksUri, String expectedIssuer, String organizationClientId, String expectedAudience) {
     this(
         jwksUri,
         expectedIssuer,
         organizationClientId,
+        expectedAudience,
         new DefaultResourceRetriever(
             /* connectTimeoutMs= */ 5000, /* readTimeoutMs= */ 5000, /* sizeLimitBytes= */ 51200));
   }
@@ -68,9 +73,25 @@ public final class VerifiedJwtTenantResolver implements TenantIdResolver {
       String expectedIssuer,
       String organizationClientId,
       ResourceRetriever jwksRetriever) {
+    this(jwksUri, expectedIssuer, organizationClientId, organizationClientId, jwksRetriever);
+  }
+
+  private VerifiedJwtTenantResolver(
+      String jwksUri,
+      String expectedIssuer,
+      String organizationClientId,
+      String expectedAudience,
+      ResourceRetriever jwksRetriever) {
     this.organizationClientId =
         java.util.Objects.requireNonNull(organizationClientId, "organizationClientId");
-    java.util.Objects.requireNonNull(expectedIssuer, "expectedIssuer");
+    if (organizationClientId.isBlank()
+        || expectedIssuer == null
+        || expectedIssuer.isBlank()
+        || expectedAudience == null
+        || expectedAudience.isBlank()) {
+      throw new IllegalArgumentException(
+          "JWT issuer, audience and organization client ID are required");
+    }
     try {
       JWKSource<SecurityContext> jwkSource =
           new com.nimbusds.jose.jwk.source.RemoteJWKSet<>(new URL(jwksUri), jwksRetriever);
@@ -80,8 +101,10 @@ public final class VerifiedJwtTenantResolver implements TenantIdResolver {
       processor.setJWSKeySelector(keySelector);
       processor.setJWTClaimsSetVerifier(
           new DefaultJWTClaimsVerifier<>(
+              Set.of(java.util.Objects.requireNonNull(expectedAudience, "expectedAudience")),
               new JWTClaimsSet.Builder().issuer(expectedIssuer).build(),
-              Set.of("sub", "exp", "iss")));
+              Set.of("sub", "exp", "iss", "aud"),
+              Set.of()));
       this.jwtProcessor = processor;
     } catch (java.net.MalformedURLException exception) {
       throw new IllegalArgumentException("Invalid jwksUri: " + jwksUri, exception);
@@ -90,6 +113,11 @@ public final class VerifiedJwtTenantResolver implements TenantIdResolver {
 
   @Override
   public TenantId resolve(Metadata headers) {
+    return resolveOrganization(headers).tenantId();
+  }
+
+  @Override
+  public ActiveOrganization resolveOrganization(Metadata headers) {
     String authorization = headers.get(AUTHORIZATION_HEADER);
     if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
       throw new TenantResolutionException("Missing or malformed 'authorization' metadata");
@@ -104,8 +132,13 @@ public final class VerifiedJwtTenantResolver implements TenantIdResolver {
       throw new TenantResolutionException("JWT rejected: " + exception.getMessage(), exception);
     }
     try {
-      return KeycloakOrganizationClaims.extract(claims.getClaims(), organizationClientId)
-          .tenantId();
+      ActiveOrganization organization =
+          KeycloakOrganizationClaims.extract(claims.getClaims(), organizationClientId);
+      String asserted = headers.get(Metadata.Key.of("tenant-id", Metadata.ASCII_STRING_MARSHALLER));
+      if (asserted != null && !organization.tenantId().equals(TenantId.parse(asserted))) {
+        throw new TenantResolutionException("Tenant metadata conflicts with verified token");
+      }
+      return organization;
     } catch (RuntimeException exception) {
       throw new TenantResolutionException("Could not resolve tenant from JWT claims", exception);
     }

@@ -1,3 +1,7 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more contributor license
+# agreements. See the NOTICE file distributed with this work for additional information regarding
+# copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0.
+# You may obtain a copy of the License at https://www.apache.org/licenses/LICENSE-2.0
 micronaut:
   application:
     name: decision-engine
@@ -5,7 +9,7 @@ micronaut:
     port: 8080
 grpc:
   server:
-    port: 9000
+    port: "${DECISION_ENGINE_GRPC_PORT:9000}"
 # datasources.default is the control-plane connection (tenant_registry lookups via
 # TenantDatabaseResolver) and Hibernate's "bootstrap" connection
 # (MultiTenantConnectionProvider#getAnyConnection - dialect resolution, DDL export tooling, never
@@ -53,16 +57,18 @@ decision-engine:
     host: ${DECISION_ENGINE_VALKEY_HOST}
     port: ${DECISION_ENGINE_VALKEY_PORT:6379}
     password: ${DECISION_ENGINE_VALKEY_PASSWORD:}
-  # trusting (default) is correct only for today's internal-only (ClusterIP) deployment - callers
-  # (e.g. forwardmeasure-agent-os) have already resolved real tenant identity upstream through their
-  # own verified flow. verified is for a future standalone deployment - see
-  # VerifiedJwtTenantResolver's own javadoc. Deliberate, already-made decision this session.
+  # Internal callers must present a signed, tenant-scoped token too.
   tenant-resolution:
-    mode: ${DECISION_ENGINE_TENANT_RESOLUTION_MODE:trusting}
+    mode: ${DECISION_ENGINE_TENANT_RESOLUTION_MODE:verified}
     jwks-uri: ${DECISION_ENGINE_TENANT_RESOLUTION_JWKS_URI:}
     issuer: ${DECISION_ENGINE_TENANT_RESOLUTION_ISSUER:}
-    organization-client-id: ${DECISION_ENGINE_TENANT_RESOLUTION_ORGANIZATION_CLIENT_ID:}
- # Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- # agreements. See the NOTICE file distributed with this work for additional information regarding
- # copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0.
- # You may obtain a copy of the License at https://www.apache.org/licenses/LICENSE-2.0
+    organization-client-id: ${DECISION_ENGINE_TENANT_RESOLUTION_ORGANIZATION_CLIENT_ID:decisionengine}
+
+    audience: "${DECISION_ENGINE_TENANT_RESOLUTION_AUDIENCE:decision-engine-api}"
+  authorization:
+    client-secret: "${DECISION_ENGINE_CLIENT_SECRET}"
+  cache:
+    maximum-tenants: "${DECISION_ENGINE_CACHE_MAXIMUM_TENANTS:256}"
+    rules-per-tenant: "${DECISION_ENGINE_CACHE_RULES_PER_TENANT:100}"
+  evaluation:
+    maximum-rule-firings: "${DECISION_ENGINE_EVALUATION_MAXIMUM_RULE_FIRINGS:10000}"

@@ -1,15 +1,12 @@
 # FDE (forwardmeasure-decision-engine) handover — deployment readiness
 
-**Superseding status, 2026-10-06:** FDE remains disabled in the current FOWF/FDS/FEI deployment
-plan. Commit `30f75b6c` on `develop` is pushed and contains build/installer corrections, not a
-completed correctness audit. The user now prioritizes integration-test development for the three
-deployed products, then repairing FDE to their standards and enabling its actual FOWF integration.
-Read the [current handover](../../forwardmeasure-openworkflow/CLAUDE_HANDOVER.md) and
-[FDE testing/review packet](../../forwardmeasure-openworkflow/docs/rehabilitation/claude-testing-instructions-2026-10-06.md#10-fde-follow-on-audit-first-integration-and-activation-second).
-The enabled-state, caller topology and trust claims below describe September's source and must be
-reassessed. A private ClusterIP or unauthenticated tenant metadata is not proof of tenant identity.
-Do not enable FDE merely by following the old remaining-actions list. No new tests or audit are
-claimed by this documentation update.
+**Superseding implementation, 2026-10-06:** read the
+[current FDE rehabilitation/integration handover](rehabilitation/fde-rehabilitation-handover-2026-10-06.md).
+Production identity, tenancy, persistence, runtime and FOWF integration repairs are implemented and
+compiled; framework assemblies package. Runtime verification and operator rollout remain pending.
+Unsigned tenant metadata is no longer accepted by production bindings. FDE remains opt-in until the
+operator applies the new infrastructure and deploys the specified images. The September statements
+below are historical, including their trust model and claims that FDE was already enabled.
 
 **Written for:** a fresh Claude Code session/agent picking up work on this repo with no memory of
 prior sessions. Read this first, then `docs/IMPLEMENTATION-SPEC.md` (the authoritative architecture

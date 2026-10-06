@@ -13,7 +13,6 @@ import com.forwardmeasure.decisionengine.domain.FactWindowStore;
 import com.forwardmeasure.decisionengine.domain.RulesetSource;
 import com.forwardmeasure.jpa.tenancy.TenantId;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,33 +29,71 @@ import org.slf4j.LoggerFactory;
  * "one per-tenant resource instance, centrally cached" pattern (e.g. {@code
  * TenantDataSourceRegistry}) rather than teaching {@code DroolsRuleEvaluator} itself about tenancy.
  */
-public final class TenantScopedRuleEvaluators {
+public final class TenantScopedRuleEvaluators implements AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(TenantScopedRuleEvaluators.class);
 
   private final RulesetSource rulesetSource;
   private final FactWindowStore factWindowStore;
-  private final ConcurrentHashMap<TenantId, DroolsRuleEvaluator> evaluators =
-      new ConcurrentHashMap<>();
+  private final java.util.Map<TenantId, DroolsRuleEvaluator> evaluators =
+      new java.util.LinkedHashMap<>(16, 0.75f, true);
+  private final int maximumTenants;
+  private final int cacheCapacity;
+  private final int maxRuleFirings;
 
   public TenantScopedRuleEvaluators(RulesetSource rulesetSource, FactWindowStore factWindowStore) {
+    this(rulesetSource, factWindowStore, 256, DroolsRuleEvaluator.DEFAULT_CACHE_CAPACITY, 10000);
+  }
+
+  public TenantScopedRuleEvaluators(
+      RulesetSource rulesetSource,
+      FactWindowStore factWindowStore,
+      int maximumTenants,
+      int cacheCapacity,
+      int maxRuleFirings) {
+    if (maximumTenants < 1
+        || cacheCapacity < 1
+        || maxRuleFirings < 1
+        || maxRuleFirings == Integer.MAX_VALUE)
+      throw new IllegalArgumentException("Evaluation limits must be positive and bounded");
+    this.maximumTenants = maximumTenants;
+    this.cacheCapacity = cacheCapacity;
+    this.maxRuleFirings = maxRuleFirings;
     this.rulesetSource = Objects.requireNonNull(rulesetSource, "rulesetSource");
     this.factWindowStore = factWindowStore;
   }
 
-  public DroolsRuleEvaluator forTenant(TenantId tenantId) {
+  public synchronized DroolsRuleEvaluator forTenant(TenantId tenantId) {
     Objects.requireNonNull(tenantId, "tenantId");
+    if (!evaluators.containsKey(tenantId) && evaluators.size() >= maximumTenants) {
+      throw io.grpc.Status.RESOURCE_EXHAUSTED
+          .withDescription("Tenant evaluator capacity reached")
+          .asRuntimeException();
+    }
     return evaluators.computeIfAbsent(
         tenantId,
         id -> {
           LOG.info(
-              "Creating compiled-rules cache for tenant {} (cache capacity {})",
+              "Creating compiled-rules cache for tenant {} (cache capacity {}, maximum rule firings"
+                  + " {})",
               id,
-              DroolsRuleEvaluator.DEFAULT_CACHE_CAPACITY);
+              cacheCapacity,
+              maxRuleFirings);
           return new DroolsRuleEvaluator(
               rulesetSource,
-              factWindowStore,
+              factWindowStore == null
+                  ? null
+                  : (ruleset, version, session, fact, size, timeout) ->
+                      factWindowStore.appendAndLoad(
+                          id.value() + "/" + ruleset, version, session, fact, size, timeout),
               new DrlCompiler(),
-              DroolsRuleEvaluator.DEFAULT_CACHE_CAPACITY);
+              cacheCapacity,
+              maxRuleFirings);
         });
+  }
+
+  @Override
+  public synchronized void close() {
+    evaluators.values().forEach(DroolsRuleEvaluator::clearCache);
+    evaluators.clear();
   }
 }

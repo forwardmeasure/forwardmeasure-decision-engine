@@ -46,4 +46,14 @@
             constraintName="uq_ruleset_version_number"/>
         <sql dbms="postgresql">CREATE UNIQUE INDEX uq_ruleset_version_active ON ruleset_version (ruleset) WHERE active = true;</sql>
     </changeSet>
+    <changeSet id="decision-engine-2-durable-version-counter" author="forwardmeasure">
+        <createTable tableName="ruleset_version_counter">
+            <column name="ruleset" type="VARCHAR(255)"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="next_version" type="BIGINT"><constraints nullable="false"/></column>
+        </createTable>
+        <sql dbms="postgresql">
+            INSERT INTO ruleset_version_counter (ruleset, next_version)
+            SELECT ruleset, MAX(ruleset_version) + 1 FROM ruleset_version GROUP BY ruleset;
+        </sql>
+    </changeSet>
 </databaseChangeLog>
