@@ -118,6 +118,10 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.5.0</version>
+                <!-- These noninteractive tools must not consume Maven's stdin. With this
+                     plugin version, outputFile uses a stream handler without stdin pumping,
+                     avoiding Stream closed failures when short-lived commands exit. Keep
+                     separate logs so a later execution cannot overwrite a tool's diagnostics. -->
                 <executions>
                     <execution>
                         <id>create-python-output-directory</id>
@@ -125,6 +129,7 @@
                         <goals><goal>exec</goal></goals>
                         <configuration>
                             <executable>mkdir</executable>
+                            <outputFile>${project.build.directory}/python-generation-logs/mkdir.log</outputFile>
                             <arguments>
                                 <argument>-p</argument>
                                 <argument>${project.build.directory}/generated-python</argument>
@@ -137,6 +142,7 @@
                         <goals><goal>exec</goal></goals>
                         <configuration>
                             <executable>chmod</executable>
+                            <outputFile>${project.build.directory}/python-generation-logs/chmod.log</outputFile>
                             <arguments>
                                 <argument>+x</argument>
                                 <argument>${project.build.directory}/protoc-bin/protoc-${protobuf.version}-${os.detected.classifier}.exe</argument>
@@ -149,6 +155,7 @@
                         <goals><goal>exec</goal></goals>
                         <configuration>
                             <executable>${project.build.directory}/protoc-bin/protoc-${protobuf.version}-${os.detected.classifier}.exe</executable>
+                            <outputFile>${project.build.directory}/python-generation-logs/protoc.log</outputFile>
                             <arguments>
                                 <argument>--proto_path=${project.build.directory}/python-proto</argument>
                                 <argument>--proto_path=${project.build.directory}/protoc-include</argument>
@@ -165,6 +172,7 @@
                         <goals><goal>exec</goal></goals>
                         <configuration>
                             <executable>${python.executable}</executable>
+                            <outputFile>${project.build.directory}/python-generation-logs/pip.log</outputFile>
                             <arguments>
                                 <argument>-m</argument>
                                 <argument>pip</argument>
@@ -182,6 +190,7 @@
                         <goals><goal>exec</goal></goals>
                         <configuration>
                             <executable>${python.executable}</executable>
+                            <outputFile>${project.build.directory}/python-generation-logs/grpc-protoc.log</outputFile>
                             <environmentVariables>
                                 <PYTHONPATH>${project.build.directory}/python-toolchain</PYTHONPATH>
                             </environmentVariables>
