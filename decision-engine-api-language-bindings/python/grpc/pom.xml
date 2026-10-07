@@ -117,7 +117,6 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
-                <version>3.5.0</version>
                 <!-- These noninteractive tools must not consume Maven's stdin. With this
                      plugin version, outputFile uses a stream handler without stdin pumping,
                      avoiding Stream closed failures when short-lived commands exit. Keep

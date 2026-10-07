@@ -37,7 +37,6 @@
     <properties>
         <container-image.name>decision-engine-quarkus</container-image.name>
         <!-- Quarkus 3.39 pins Netty 4.1; Lettuce 7.x requires Netty 4.2's event-loop API. -->
-        <lettuce.quarkus.version>6.5.5.RELEASE</lettuce.quarkus.version>
     </properties>
 
     <dependencyManagement>
@@ -127,6 +126,15 @@
 
     <build>
         <plugins>
+      <!-- Explicit compatibility exceptions; all values remain pinned by the platform. -->
+      <plugin>
+        <groupId>com.forwardmeasure.platform</groupId>
+        <artifactId>forwardmeasure-platform-policy-maven-plugin</artifactId>
+        <configuration><overrides>
+          <override><key>dependency:io.lettuce:lettuce-core</key><reason>Quarkus Redis integration requires Lettuce 6.5; preserve the existing Quarkus compatibility pin.</reason></override>
+        </overrides></configuration>
+      </plugin>
+
             <plugin>
                 <groupId>io.quarkus</groupId>
                 <artifactId>quarkus-maven-plugin</artifactId>

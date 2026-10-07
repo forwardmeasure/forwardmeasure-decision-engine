@@ -46,21 +46,6 @@
             <!-- Spring Boot 4.1's BOM still manages grpc-api/context at 1.80 while the
                  platform's grpc toolchain is 1.83. Keep the transport family coherent: the
                  1.83 shaded transport calls InternalTcpMetrics introduced in the matching API. -->
-            <dependency>
-                <groupId>io.grpc</groupId>
-                <artifactId>grpc-api</artifactId>
-                <version>${grpc.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.grpc</groupId>
-                <artifactId>grpc-context</artifactId>
-                <version>${grpc.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.grpc</groupId>
-                <artifactId>grpc-services</artifactId>
-                <version>${grpc.version}</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 

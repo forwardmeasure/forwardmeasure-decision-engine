@@ -1,5 +1,16 @@
 # FDE rehabilitation and FOWF integration — 2026-10-06
 
+## Subsequent deployment-selection source update
+
+The shared deployment selection now defaults to FDE enabled, Quarkus and Kafka Streams; the
+opt-in/default-disabled instructions later in this historical record are superseded. Optional
+`FORWARDMEASURE_ENABLE_FDE=false` still works for an installation without an existing FDE release;
+retiring an installed release requires an explicit operator plan. FDE image/digest selection uses
+the same frozen configuration as the other products. The current GCP environment retains its
+legacy namespace until coordinated cutover. No cluster change was performed for this update.
+See [deployment configuration and cutover](../../../forwardmeasure-platform/docs/deployment-configuration-and-cutover.md)
+and [shared cache policy](../../../forwardmeasure-platform/docs/maven-build-cache.md).
+
 ## Latest deployment repair: health protocol compatibility
 
 The operator's `/tmp/fowf-fds-fei-fde-install-2026-10-06-retry3.log` ended with the FDE

@@ -42,7 +42,7 @@
         <dependency>
             <groupId>io.lettuce</groupId>
             <artifactId>lettuce-core</artifactId>
-            <version>6.5.5.RELEASE</version>
+            <version>${lettuce.quarkus.version}</version>
             <!-- Version supplied by forwardmeasure-platform's own dependencyManagement
                  for the default non-framework build. Framework bindings use this Netty 4.1
                  compatible driver because Quarkus currently supplies Netty 4.1 at runtime. -->
@@ -71,4 +71,14 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+  <build><plugins>
+      <!-- Explicit compatibility exceptions; all values remain pinned by the platform. -->
+      <plugin>
+        <groupId>com.forwardmeasure.platform</groupId>
+        <artifactId>forwardmeasure-platform-policy-maven-plugin</artifactId>
+        <configuration><overrides>
+          <override><key>dependency:io.lettuce:lettuce-core</key><reason>Quarkus Redis integration requires Lettuce 6.5; preserve the existing Quarkus compatibility pin.</reason></override>
+        </overrides></configuration>
+      </plugin>
+  </plugins></build>
 </project>

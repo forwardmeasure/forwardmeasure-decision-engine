@@ -58,7 +58,6 @@
         <dependency>
             <groupId>org.apache.tomcat</groupId>
             <artifactId>annotations-api</artifactId>
-            <version>6.0.53</version>
             <scope>provided</scope>
             <!-- Generated grpc-java stub classes reference javax.annotation.Generated on some
                  codegen versions - provided-scope only. Remove if the generated code for
@@ -79,7 +78,6 @@
             <plugin>
                 <groupId>org.xolstice.maven.plugins</groupId>
                 <artifactId>protobuf-maven-plugin</artifactId>
-                <version>0.6.1</version>
                 <executions>
                     <execution>
                         <id>generate-decision-engine-grpc-java</id>

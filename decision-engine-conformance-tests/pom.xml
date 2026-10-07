@@ -36,14 +36,7 @@
 
     <dependencyManagement>
         <dependencies>
-            <dependency>
-                <!-- Dependency-convergence pin: decision-engine-grpc's own transitive liquibase-core
-                     needs 2.6; forwardmeasure-testcontainers-kubernetes's jackson-dataformat-yaml
-                     only needs 2.5 - pinned here so the higher of the two wins deterministically. -->
-                <groupId>org.yaml</groupId>
-                <artifactId>snakeyaml</artifactId>
-                <version>2.6</version>
-            </dependency>
+
         </dependencies>
     </dependencyManagement>
 

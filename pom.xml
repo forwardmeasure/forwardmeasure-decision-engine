@@ -57,40 +57,30 @@
     </issueManagement>
 
     <properties>
-        <revision>1.1.0</revision>
+    <!-- Project release identity is local for Maven CI-friendly reactor parent resolution. -->
+    <revision>1.1.0</revision>
 
         <!-- Not yet in forwardmeasure-platform's own BOM as of this repo's creation - see
              IMPLEMENTATION-SPEC.md Section 3. grpc.version/protobuf.version/protoc.jar.version
              ARE already in the platform BOM and must never be repinned here. -->
-        <drools.version>10.2.0</drools.version>
 
         <!-- Needed for openworkflow-migrations, reused as a shared library the same way
              forwardmeasure-entity-intelligence's own migration Job does - see
              decision-engine-database-migrations' own pom.xml description. Matches fei's own root
              pom's pinned value exactly. -->
-        <forwardmeasure.openworkflow.version>1.1.0</forwardmeasure.openworkflow.version>
 
         <!-- Not published to any remote repository as of this addition - requires a local
              `mvn install` from forwardmeasure-authzen before this reactor can resolve it, same as
              fei's own root pom flags. Needed for KeycloakOrganizationClaims (decision-engine-grpc's
              VerifiedJwtTenantResolver). Matches fei's own pinned value exactly. -->
-        <forwardmeasure.authzen.version>1.1.0</forwardmeasure.authzen.version>
 
-        <container-image.build>false</container-image.build>
-        <container-image.push>false</container-image.push>
-        <container-image.registry>docker.io</container-image.registry>
-        <container-image.group>forwardmeasure</container-image.group>
-        <container-image.tag>${project.version}</container-image.tag>
 
-        <archunit.version>1.4.1</archunit.version>
 
-        <duplicate.finder.version>2.0.1</duplicate.finder.version>
 
         <!-- Not in forwardmeasure-platform's own pluginManagement - the enforcer's
              RequirePluginVersions rule (enforce-build, below) rejects the super-POM default
              resolution, so this module pins it explicitly rather than each consuming module
              (currently only decision-engine-api-language-bindings-java-grpc) doing so itself. -->
-        <build-helper-maven-plugin.version>3.6.1</build-helper-maven-plugin.version>
     </properties>
 
     <!-- Module order follows IMPLEMENTATION-SPEC.md Section 2 exactly. Do not reorder without
@@ -143,41 +133,6 @@
             <version>${forwardmeasure.openworkflow.version}</version>
             <type>pom</type>
             <scope>import</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.forwardmeasure.authzen</groupId>
-            <artifactId>forwardmeasure-authzen-api</artifactId>
-            <version>${forwardmeasure.authzen.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.forwardmeasure.authzen</groupId>
-            <artifactId>forwardmeasure-authzen-testkit</artifactId>
-            <version>${forwardmeasure.authzen.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.kie</groupId>
-            <artifactId>kie-api</artifactId>
-            <version>${drools.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.drools</groupId>
-            <artifactId>drools-core</artifactId>
-            <version>${drools.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.drools</groupId>
-            <artifactId>drools-compiler</artifactId>
-            <version>${drools.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.drools</groupId>
-            <artifactId>drools-mvel</artifactId>
-            <version>${drools.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.tngtech.archunit</groupId>
-            <artifactId>archunit-junit5</artifactId>
-            <version>${archunit.version}</version>
         </dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
@@ -313,12 +268,10 @@
                 <plugin>
                     <groupId>org.basepom.maven</groupId>
                     <artifactId>duplicate-finder-maven-plugin</artifactId>
-                    <version>${duplicate.finder.version}</version>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>build-helper-maven-plugin</artifactId>
-                    <version>${build-helper-maven-plugin.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -373,7 +326,6 @@
         <profile>
             <id>container-image</id>
             <properties>
-                <container-image.build>true</container-image.build>
             </properties>
         </profile>
     </profiles>

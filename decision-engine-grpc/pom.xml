@@ -36,7 +36,7 @@
 
     <dependencies>
         <dependency><groupId>io.grpc</groupId><artifactId>grpc-services</artifactId></dependency>
-        <dependency><groupId>com.forwardmeasure.authzen</groupId><artifactId>forwardmeasure-authzen-client</artifactId><version>${forwardmeasure.authzen.version}</version></dependency>
+        <dependency><groupId>com.forwardmeasure.authzen</groupId><artifactId>forwardmeasure-authzen-client</artifactId></dependency>
         <dependency><groupId>com.forwardmeasure.jpa</groupId><artifactId>forwardmeasure-jpa-liquibase</artifactId></dependency>
         <dependency>
             <groupId>${project.groupId}</groupId>
@@ -78,7 +78,6 @@
                  NimbusJwtDecoder uses internally. -->
             <groupId>com.nimbusds</groupId>
             <artifactId>nimbus-jose-jwt</artifactId>
-            <version>10.9.1</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
