@@ -135,9 +135,16 @@ public class DecisionEngineMicronautBinding {
       javax.sql.DataSource controlPlane,
       ValkeyFactWindowStore store,
       TenantExecution execution) {
+    // Probes run without a tenant or transaction. The Micronaut contextual datasource expects
+    // an active connection scope; use its physical control-plane pool, as TenantRegistry does.
+    var readinessDataSource =
+        io.micronaut.data.connection.jdbc.advice.DelegatingDataSource.unwrapDataSource(
+            controlPlane);
     return new TenantContextServerInterceptor(
         resolver,
-        () -> TenantContextServerInterceptor.dependenciesHealthy(controlPlane, store::isHealthy));
+        () ->
+            TenantContextServerInterceptor.dependenciesHealthy(
+                readinessDataSource, store::isHealthy));
   }
 
   @Singleton

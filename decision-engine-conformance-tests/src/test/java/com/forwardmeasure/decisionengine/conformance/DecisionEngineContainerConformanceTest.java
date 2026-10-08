@@ -15,6 +15,7 @@
  */
 package com.forwardmeasure.decisionengine.conformance;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -331,9 +332,29 @@ class DecisionEngineContainerConformanceTest {
       assertEquals(
           HealthCheckResponse.ServingStatus.SERVING,
           HealthGrpc.newBlockingStub(channel)
+              .withDeadlineAfter(3, java.util.concurrent.TimeUnit.SECONDS)
+              .check(HealthCheckRequest.newBuilder().setService("liveness").build())
+              .getStatus());
+      // An open TCP port is not dependency readiness. Poll the public probe, just as kubelet
+      // does, with a deadline on each RPC and a bounded overall startup window.
+      await()
+          .alias(framework + " anonymous gRPC readiness")
+          .atMost(Duration.ofSeconds(30))
+          .pollInterval(Duration.ofMillis(200))
+          .untilAsserted(
+              () ->
+                  assertEquals(
+                      HealthCheckResponse.ServingStatus.SERVING,
+                      HealthGrpc.newBlockingStub(channel)
+                          .withDeadlineAfter(3, java.util.concurrent.TimeUnit.SECONDS)
+                          .check(HealthCheckRequest.newBuilder().setService("readiness").build())
+                          .getStatus()));
+      assertEquals(
+          HealthCheckResponse.ServingStatus.SERVING,
+          HealthGrpc.newBlockingStub(channel)
+              .withDeadlineAfter(3, java.util.concurrent.TimeUnit.SECONDS)
               .check(HealthCheckRequest.getDefaultInstance())
-              .getStatus(),
-          framework + " must serve grpc.health.v1.Health without tenant metadata");
+              .getStatus());
 
       var anonymous = EvaluationServiceGrpc.newBlockingStub(channel);
       assertStatus(
@@ -398,6 +419,8 @@ class DecisionEngineContainerConformanceTest {
           managementA, evaluationA, managementB, evaluationB, framework, sharedRuleset);
       verifyEvaluatorCannotManageOrAdminister(
           channel, evaluatorToken, managementA, adminA, sharedRuleset);
+      verifyCrossTenantStatefulIsolation(
+          managementA, evaluationA, managementB, evaluationB, sharedRuleset + "/stateful");
       verifyPhysicalDatabaseIsolation(postgres, databaseA, databaseB, sharedRuleset);
     } finally {
       channel.shutdownNow();
@@ -627,6 +650,38 @@ class DecisionEngineContainerConformanceTest {
         dataset.idleTimeoutSeconds(),
         true);
     String session = framework + "-" + suffix;
+    verifyStatefulSession(evaluation, dataset, framework, ruleset, session);
+  }
+
+  private static void verifyCrossTenantStatefulIsolation(
+      RulesetManagementServiceGrpc.RulesetManagementServiceBlockingStub managementA,
+      EvaluationServiceGrpc.EvaluationServiceBlockingStub evaluationA,
+      RulesetManagementServiceGrpc.RulesetManagementServiceBlockingStub managementB,
+      EvaluationServiceGrpc.EvaluationServiceBlockingStub evaluationB,
+      String ruleset) {
+    GoldenDataset dataset = GoldenDataset.load("transaction-velocity");
+    for (var management : List.of(managementA, managementB)) {
+      create(
+          management,
+          ruleset,
+          dataset.drl(),
+          RulesetMode.STATEFUL,
+          dataset.maxWindowSize(),
+          dataset.idleTimeoutSeconds(),
+          true);
+    }
+    // Identical ruleset, version and caller session key must still address separate Valkey
+    // windows. Tenant B must start empty even after tenant A accumulated enough facts to fire.
+    verifyStatefulSession(evaluationA, dataset, "tenant A", ruleset, "same-caller-session");
+    verifyStatefulSession(evaluationB, dataset, "tenant B", ruleset, "same-caller-session");
+  }
+
+  private static void verifyStatefulSession(
+      EvaluationServiceGrpc.EvaluationServiceBlockingStub evaluation,
+      GoldenDataset dataset,
+      String framework,
+      String ruleset,
+      String session) {
     for (GoldenDataset.GoldenCase testCase : dataset.cases()) {
       if (testCase.expectedStatus() != null) {
         assertStatus(

@@ -1,5 +1,48 @@
 # FDE rehabilitation and FOWF integration — 2026-10-06
 
+## Packaged gRPC acceptance and Micronaut readiness repair — 2026-10-08
+
+All three framework conformance cases now pass against locally built service images with real
+Keycloak, PostgreSQL, Valkey and migration jobs. `/tmp/fde-authenticated-conformance-03-20261008.log`:
+three cases, zero failures/errors/skips, BUILD SUCCESS, 1m44s. This is executed packaged-service
+evidence, superseding the earlier compile-only status for these scenarios. It does not establish
+the FOWF adapter path or both embedded/external Helm shapes.
+
+The conformance test previously sent unsigned tenant headers and was disabled even by `full-suite`.
+It now runs independently for each framework with signed tenant identities, explicit audiences and
+organization-scoped grants. It exercises golden evaluations, version pinning, administration,
+ruleset persistence, physical database isolation and tenant-separated stateful windows using the
+same ruleset/version/session key. Negative calls cover unauthenticated callers, audience/tenant
+conflicts and denied permissions; an evaluator cannot replace rules or clear caches. PostgreSQL
+and Keycloak use shared fixtures; migration jobs own provisioning, with SQL limited to read-only
+observations. Shared Valkey fixture consolidation remains outstanding.
+
+The first live run found a shared test-fixture defect (overlapping grants used UNANIMOUS rather
+than production's AFFIRMATIVE strategy) and a production Micronaut readiness defect: its probe
+accessed a transaction-bound datasource outside a transaction. The Micronaut binding now unwraps
+the physical control-plane pool, as the shared tenant registry does. The public gRPC test requires
+anonymous liveness and bounded readiness success. It failed on the old image and passes with:
+`sha256:18ff556887e7b5e433de85edf27f15f147f43e87f4b494c5d98acc904beca944`.
+
+All 26 modules' production/test sources compile after the repair:
+`/tmp/fde-readiness-repair-compile-20261008.log` (15.033s). Only the changed Micronaut image then
+needed rebuilding: `/tmp/fde-micronaut-readiness-image-20261008.log` (9.022s). No images were pushed
+and no cluster was changed. To reproduce that local image build, with no competing Maven build:
+
+```bash
+export JAVA_HOME=/opt/java/jdk-25.0.3+9
+export PATH="$JAVA_HOME/bin:$PATH"
+export MAVEN_OPTS="${MAVEN_OPTS:-} -XX:TieredStopAtLevel=1"
+/home/pn/Documents/code/forwardmeasure/forwardmeasure-openworkflow/scripts/build-bounded.sh \
+  -f /home/pn/Documents/code/forwardmeasure/forwardmeasure-decision-engine/pom.xml \
+  -pl :decision-engine-micronaut -am -Pcontainer-image -B -ntp \
+  -DskipTests=true -DskipITs=true -Dmaven.test.skip=false \
+  -Dcontainer-image.build=true -Dcontainer-image.push=false -Ddocker.skip.push=true package
+```
+
+The JVM workaround above is Maven-only. Do not propagate it into application images or global
+`JAVA_TOOL_OPTIONS`. Quarkus/Spring need no additional production rebuild for this Micronaut fix.
+
 ## Subsequent deployment-selection source update
 
 The shared deployment selection now defaults to FDE enabled, Quarkus and Kafka Streams; the
