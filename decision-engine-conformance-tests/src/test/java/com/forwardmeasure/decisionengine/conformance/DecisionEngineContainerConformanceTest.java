@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.forwardmeasure.authzen.testkit.AuthzenKeycloakFixture;
 import com.forwardmeasure.decisionengine.conformance.fixture.GoldenDataset;
 import com.forwardmeasure.decisionengine.contract.v1.ClearCompiledRulesCacheRequest;
 import com.forwardmeasure.decisionengine.contract.v1.CreateRulesetVersionRequest;
@@ -34,10 +35,11 @@ import com.forwardmeasure.decisionengine.contract.v1.RulesetMode;
 import com.forwardmeasure.decisionengine.contract.v1.RulesetVersion;
 import com.forwardmeasure.decisionengine.contract.v1.UnloadRulesetRequest;
 import com.forwardmeasure.decisionengine.contract.v1.WarmRulesetRequest;
-import com.forwardmeasure.decisionengine.grpc.tenancy.TrustingMetadataTenantResolver;
 import com.forwardmeasure.jpa.tenancy.Did;
 import com.forwardmeasure.jpa.tenancy.TenantDatabase;
 import com.forwardmeasure.jpa.tenancy.TenantId;
+import com.forwardmeasure.testcontainers.postgresql.PostgreSqlContainerConfiguration;
+import com.forwardmeasure.testcontainers.postgresql.PostgreSqlTestContainer;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import io.grpc.ManagedChannel;
@@ -58,14 +60,17 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
-import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.startupcheck.OneShotStartupCheckStrategy;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -83,15 +88,9 @@ import org.testcontainers.containers.wait.strategy.Wait;
 class DecisionEngineContainerConformanceTest {
   private static final Logger LOG =
       LoggerFactory.getLogger(DecisionEngineContainerConformanceTest.class);
-  private static final String POSTGRES_IMAGE = "postgres:17-alpine";
   private static final String VALKEY_IMAGE = "valkey/valkey:8.1";
-  private static final String MIGRATION_IMAGE =
-      "forwardmeasure/decision-engine-database-migration-service:1.1.0";
-  private static final Map<String, String> SERVICE_IMAGES =
-      Map.of(
-          "quarkus", "forwardmeasure/decision-engine-quarkus:1.1.0",
-          "spring", "forwardmeasure/decision-engine-spring:1.1.0",
-          "micronaut", "forwardmeasure/decision-engine-micronaut:1.1.0");
+  private static final String AUDIENCE = "decision-engine-api";
+  private static final String TEST_CLIENT_SECRET = "conformance-client-secret";
   private static final String POSTGRES_SUPERUSER = "postgres";
   private static final String POSTGRES_SUPERUSER_PASSWORD = "postgres-password";
   private static final String RUNTIME_USERNAME = "decision_engine_runtime";
@@ -101,68 +100,163 @@ class DecisionEngineContainerConformanceTest {
   private static final String TENANT_B_ALIAS = "tenant-b";
   private static final String SHARED_RULESET_NAME = "conformance/sharedName";
 
-  @Test
-  void allFrameworksRouteEachTenantToItsOwnPhysicalDatabase() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"quarkus", "spring", "micronaut"})
+  @Timeout(300)
+  void authenticatedFrameworkRoutesEachTenantToItsOwnPhysicalDatabase(String framework)
+      throws Exception {
     Assumptions.assumeTrue(
         Boolean.getBoolean("decision.engine.conformance.live"),
-        "run with -Ddecision.engine.conformance.live=true after building local service images");
+        "enable full-suite and build the declared local service images");
     try (Network network = Network.newNetwork();
-        PostgreSQLContainer<?> postgres =
-            new PostgreSQLContainer<>(POSTGRES_IMAGE)
-                // Deliberately the bootstrap/admin database, not "decision_engine" - real
-                // per-tenant
-                // databases are created by the migration Job itself (CREATE DATABASE, via
-                // OpenWorkflowTenantMigrator), never pre-declared by this test.
-                .withDatabaseName(POSTGRES_SUPERUSER)
-                .withUsername(POSTGRES_SUPERUSER)
-                .withPassword(POSTGRES_SUPERUSER_PASSWORD)
-                .withNetwork(network)
-                .withNetworkAliases("postgres");
+        AuthzenKeycloakFixture identity = AuthzenKeycloakFixture.start(network, "keycloak");
+        PostgreSqlTestContainer postgres =
+            new PostgreSqlTestContainer(
+                new PostgreSqlContainerConfiguration(
+                        PostgreSqlContainerConfiguration.DEFAULT_IMAGE,
+                        POSTGRES_SUPERUSER,
+                        POSTGRES_SUPERUSER,
+                        POSTGRES_SUPERUSER_PASSWORD,
+                        Optional.empty(),
+                        List.of(),
+                        PostgreSqlContainerConfiguration.DEFAULT_MEMORY_BYTES,
+                        PostgreSqlContainerConfiguration.DEFAULT_MEMORY_SWAP_BYTES)
+                    .withNetwork(network.getId(), List.of("postgres")));
         GenericContainer<?> valkey =
             new GenericContainer<>(VALKEY_IMAGE)
                 .withNetwork(network)
                 .withNetworkAliases("valkey")
                 .withExposedPorts(6379)
+                .withCreateContainerCmdModifier(
+                    command -> command.getHostConfig().withMemory(256L * 1024 * 1024))
                 .withCommand("--requirepass", "valkey-password")
                 .waitingFor(Wait.forListeningPort());
+        GenericContainer<?> registryMigration = registryMigration(network);
         GenericContainer<?> migration = migration(network);
-        GenericContainer<?> quarkus = service(network, "quarkus");
-        GenericContainer<?> spring = service(network, "spring");
-        GenericContainer<?> micronaut = service(network, "micronaut")) {
+        GenericContainer<?> service = service(network, framework, identity)) {
+      String organizationA =
+          identity.provisionTenant(
+              TENANT_A_ALIAS,
+              Did.parse("did:web:" + TENANT_A_ALIAS + "." + TENANT_DOMAIN),
+              "decision-admin");
+      String organizationB =
+          identity.provisionTenant(
+              TENANT_B_ALIAS,
+              Did.parse("did:web:" + TENANT_B_ALIAS + "." + TENANT_DOMAIN),
+              "decision-admin");
+      identity.grantOrganizationClientRole(organizationA, "decision-evaluator");
+      identity.grantResourceAuthorization(
+          organizationA,
+          "decision-engine",
+          "rulesets",
+          "evaluate-decisions",
+          "decision-evaluator",
+          Set.of("decision:evaluate"));
+      for (String organization : List.of(organizationA, organizationB)) {
+        identity.grantResourceAuthorization(
+            organization,
+            "decision-engine",
+            "rulesets",
+            "manage-decisions",
+            "decision-admin",
+            Set.of("decision:evaluate", "decision:manage", "decision:admin"));
+      }
       postgres.start();
       valkey.start();
+      // The owning FOWF migration job establishes tenant identity/registry entries. FDE's
+      // migration job adds its real schema; the test never seeds business rows with SQL.
+      registryMigration.start();
+      assertEquals(0, registryMigration.getCurrentContainerInfo().getState().getExitCodeLong());
       migration.start();
       assertEquals(0, migration.getCurrentContainerInfo().getState().getExitCodeLong());
-      quarkus.start();
-      spring.start();
-      micronaut.start();
-
+      service.start();
+      // Mint short-lived credentials after image startup so infrastructure startup time does
+      // not consume the authenticated scenario's token lifetime.
+      String tokenA =
+          token(identity, "decision-tenant-a", organizationA, "decision-admin", AUDIENCE);
+      String tokenB =
+          token(identity, "decision-tenant-b", organizationB, "decision-admin", AUDIENCE);
+      String deniedToken = token(identity, "decision-denied", organizationA, "ungranted", AUDIENCE);
+      String wrongAudience =
+          token(
+              identity,
+              "decision-wrong-audience",
+              organizationA,
+              "decision-admin",
+              "another-service");
+      String evaluatorToken =
+          token(identity, "decision-evaluator", organizationA, "decision-evaluator", AUDIENCE);
+      LOG.info(
+          "Conformance framework={} imageId={}",
+          framework,
+          service.getCurrentContainerInfo().getImageId());
       TenantId tenantA =
           TenantId.forDid(Did.parse("did:web:" + TENANT_A_ALIAS + "." + TENANT_DOMAIN));
       TenantId tenantB =
           TenantId.forDid(Did.parse("did:web:" + TENANT_B_ALIAS + "." + TENANT_DOMAIN));
       TenantDatabase databaseA = TenantDatabase.forAlias(TENANT_A_ALIAS);
       TenantDatabase databaseB = TenantDatabase.forAlias(TENANT_B_ALIAS);
-
       verifyBothTenantDatabasesExist(postgres, databaseA, databaseB);
-
       verifyFramework(
-          "quarkus", quarkus.getMappedPort(9000), tenantA, tenantB, postgres, databaseA, databaseB);
-      verifyFramework(
-          "spring", spring.getMappedPort(9000), tenantA, tenantB, postgres, databaseA, databaseB);
-      verifyFramework(
-          "micronaut",
-          micronaut.getMappedPort(9000),
+          framework,
+          service.getMappedPort(9000),
           tenantA,
           tenantB,
+          tokenA,
+          tokenB,
+          deniedToken,
+          wrongAudience,
+          evaluatorToken,
           postgres,
           databaseA,
           databaseB);
     }
   }
 
+  private static String token(
+      AuthzenKeycloakFixture identity,
+      String clientId,
+      String organization,
+      String role,
+      String audience) {
+    identity.createServiceAccountClient(clientId, TEST_CLIENT_SECRET);
+    identity.addServiceAccountToOrganization(organization, clientId, role);
+    identity.grantTokenAudience(clientId, audience);
+    return identity.clientCredentialsToken(clientId, TEST_CLIENT_SECRET);
+  }
+
+  private static String image(String component) {
+    String image = System.getProperty("decision.engine.image." + component);
+    if (image == null || image.isBlank())
+      throw new IllegalStateException("Missing current image property for " + component);
+    return image;
+  }
+
+  private static GenericContainer<?> registryMigration(Network network) {
+    return new GenericContainer<>(image("registry-migration"))
+        .withImagePullPolicy(imageName -> false)
+        .withCreateContainerCmdModifier(
+            command -> command.getHostConfig().withMemory(2L * 1024 * 1024 * 1024))
+        .withNetwork(network)
+        .withStartupCheckStrategy(
+            new OneShotStartupCheckStrategy().withTimeout(Duration.ofMinutes(2)))
+        .withEnv(
+            "OPENWORKFLOW_CONTROL_PLANE_DATABASE_URL", "jdbc:postgresql://postgres:5432/postgres")
+        .withEnv("OPENWORKFLOW_ADMIN_DATABASE_USERNAME", POSTGRES_SUPERUSER)
+        .withEnv("OPENWORKFLOW_ADMIN_DATABASE_PASSWORD", POSTGRES_SUPERUSER_PASSWORD)
+        .withEnv("OPENWORKFLOW_RUNTIME_DATABASE_USERNAME", "openworkflow_runtime")
+        .withEnv("OPENWORKFLOW_RUNTIME_DATABASE_PASSWORD", "workflow-test-password")
+        .withEnv("OPENWORKFLOW_TENANT_DOMAIN", TENANT_DOMAIN)
+        .withEnv(
+            "OPENWORKFLOW_TENANTS", TENANT_A_ALIAS + ":Tenant A," + TENANT_B_ALIAS + ":Tenant B")
+        .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("registry-migration"));
+  }
+
   private static GenericContainer<?> migration(Network network) {
-    return new GenericContainer<>(MIGRATION_IMAGE)
+    return new GenericContainer<>(image("migration"))
+        .withImagePullPolicy(imageName -> false)
+        .withCreateContainerCmdModifier(
+            command -> command.getHostConfig().withMemory(2L * 1024 * 1024 * 1024))
         .withNetwork(network)
         .withStartupCheckStrategy(
             new OneShotStartupCheckStrategy().withTimeout(Duration.ofMinutes(2)))
@@ -178,10 +272,23 @@ class DecisionEngineContainerConformanceTest {
         .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("migration"));
   }
 
-  private static GenericContainer<?> service(Network network, String framework) {
-    return new GenericContainer<>(SERVICE_IMAGES.get(framework))
+  private static GenericContainer<?> service(
+      Network network, String framework, AuthzenKeycloakFixture identity) {
+    return new GenericContainer<>(image(framework))
+        .withImagePullPolicy(imageName -> false)
+        .withCreateContainerCmdModifier(
+            command -> command.getHostConfig().withMemory(2L * 1024 * 1024 * 1024))
         .withNetwork(network)
         .withNetworkAliases("decision-engine-" + framework)
+        .withEnv(
+            "DECISION_ENGINE_TENANT_RESOLUTION_JWKS_URI",
+            identity.networkIssuer() + "/protocol/openid-connect/certs")
+        .withEnv("DECISION_ENGINE_TENANT_RESOLUTION_ISSUER", identity.networkIssuer().toString())
+        .withEnv(
+            "DECISION_ENGINE_TENANT_RESOLUTION_ORGANIZATION_CLIENT_ID",
+            AuthzenKeycloakFixture.AUTHZEN_CLIENT_ID)
+        .withEnv("DECISION_ENGINE_TENANT_RESOLUTION_AUDIENCE", AUDIENCE)
+        .withEnv("DECISION_ENGINE_CLIENT_SECRET", AuthzenKeycloakFixture.AUTHZEN_CLIENT_SECRET)
         .withExposedPorts(9000)
         // Bootstrap-only datasource (build-time Hibernate dialect resolution) - never real tenant
         // data access, see application.{yml,properties}'s own comment on this in each deployment.
@@ -207,7 +314,12 @@ class DecisionEngineContainerConformanceTest {
       int port,
       TenantId tenantA,
       TenantId tenantB,
-      PostgreSQLContainer<?> postgres,
+      String tokenA,
+      String tokenB,
+      String deniedToken,
+      String wrongAudience,
+      String evaluatorToken,
+      PostgreSqlTestContainer postgres,
       TenantDatabase databaseA,
       TenantDatabase databaseB)
       throws Exception {
@@ -223,11 +335,46 @@ class DecisionEngineContainerConformanceTest {
               .getStatus(),
           framework + " must serve grpc.health.v1.Health without tenant metadata");
 
-      var managementA = withTenant(RulesetManagementServiceGrpc.newBlockingStub(channel), tenantA);
-      var evaluationA = withTenant(EvaluationServiceGrpc.newBlockingStub(channel), tenantA);
-      var adminA = withTenant(DecisionEngineAdminServiceGrpc.newBlockingStub(channel), tenantA);
-      var managementB = withTenant(RulesetManagementServiceGrpc.newBlockingStub(channel), tenantB);
-      var evaluationB = withTenant(EvaluationServiceGrpc.newBlockingStub(channel), tenantB);
+      var anonymous = EvaluationServiceGrpc.newBlockingStub(channel);
+      assertStatus(
+          Status.Code.UNAUTHENTICATED,
+          () -> anonymous.evaluate(request("missing/ruleset", Map.of(), "")));
+      Metadata unsigned = new Metadata();
+      unsigned.put(
+          Metadata.Key.of("tenant-id", Metadata.ASCII_STRING_MARSHALLER),
+          tenantA.value().toString());
+      assertStatus(
+          Status.Code.UNAUTHENTICATED,
+          () ->
+              anonymous
+                  .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(unsigned))
+                  .evaluate(request("missing/ruleset", Map.of(), "")));
+      assertStatus(
+          Status.Code.UNAUTHENTICATED,
+          () ->
+              withBearer(anonymous, wrongAudience)
+                  .evaluate(request("missing/ruleset", Map.of(), "")));
+      assertStatus(
+          Status.Code.PERMISSION_DENIED,
+          () ->
+              withBearer(anonymous, deniedToken)
+                  .evaluate(request("missing/ruleset", Map.of(), "")));
+      Metadata conflicting = new Metadata();
+      conflicting.put(
+          Metadata.Key.of("tenant-id", Metadata.ASCII_STRING_MARSHALLER),
+          tenantB.value().toString());
+      assertStatus(
+          Status.Code.UNAUTHENTICATED,
+          () ->
+              withBearer(anonymous, tokenA)
+                  .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(conflicting))
+                  .evaluate(request("missing/ruleset", Map.of(), "")));
+
+      var managementA = withBearer(RulesetManagementServiceGrpc.newBlockingStub(channel), tokenA);
+      var evaluationA = withBearer(EvaluationServiceGrpc.newBlockingStub(channel), tokenA);
+      var adminA = withBearer(DecisionEngineAdminServiceGrpc.newBlockingStub(channel), tokenA);
+      var managementB = withBearer(RulesetManagementServiceGrpc.newBlockingStub(channel), tokenB);
+      var evaluationB = withBearer(EvaluationServiceGrpc.newBlockingStub(channel), tokenB);
       String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
 
       // Existing functional coverage - exercised under tenant A only (isolation itself is proven
@@ -244,19 +391,60 @@ class DecisionEngineContainerConformanceTest {
       assertTrue(
           adminA.getStatistics(GetStatisticsRequest.getDefaultInstance()).getInvocationCount() > 0);
 
-      // New: real cross-tenant isolation, same ruleset name, two tenants, over real gRPC against
-      // real per-tenant Postgres databases. Ruleset name is qualified by framework since all
-      // three frameworks share the same underlying Postgres containers in this one test run -
-      // without that, the second and third frameworks' creates would land as new versions of the
-      // SAME row the first framework already created, rather than each framework getting an
-      // independent, isolated proof.
+      // Same ruleset name, distinct tenants and physical databases. Each framework case owns
+      // fresh infrastructure; the name also identifies its framework in failure diagnostics.
       String sharedRuleset = SHARED_RULESET_NAME + "/" + framework;
       verifyCrossTenantRulesetIsolation(
           managementA, evaluationA, managementB, evaluationB, framework, sharedRuleset);
+      verifyEvaluatorCannotManageOrAdminister(
+          channel, evaluatorToken, managementA, adminA, sharedRuleset);
       verifyPhysicalDatabaseIsolation(postgres, databaseA, databaseB, sharedRuleset);
     } finally {
       channel.shutdownNow();
     }
+  }
+
+  private static void verifyEvaluatorCannotManageOrAdminister(
+      ManagedChannel channel,
+      String evaluatorToken,
+      RulesetManagementServiceGrpc.RulesetManagementServiceBlockingStub management,
+      DecisionEngineAdminServiceGrpc.DecisionEngineAdminServiceBlockingStub admin,
+      String ruleset) {
+    var evaluator = withBearer(EvaluationServiceGrpc.newBlockingStub(channel), evaluatorToken);
+    assertEquals(
+        "tenant-a-rule",
+        evaluator
+            .evaluate(request(ruleset, Map.of("go", true), ""))
+            .getResult()
+            .getFieldsOrThrow("outcome")
+            .getStringValue());
+    var activeRequest = GetActiveRulesetVersionRequest.newBuilder().setRuleset(ruleset).build();
+    var activeBefore = management.getActiveRulesetVersion(activeRequest);
+    var restrictedManagement =
+        withBearer(RulesetManagementServiceGrpc.newBlockingStub(channel), evaluatorToken);
+    assertStatus(
+        Status.Code.PERMISSION_DENIED,
+        () ->
+            create(
+                restrictedManagement,
+                ruleset,
+                sharedNameDrl("unauthorized-replacement"),
+                RulesetMode.STATELESS,
+                0,
+                0,
+                true));
+    assertEquals(activeBefore, management.getActiveRulesetVersion(activeRequest));
+    long cacheSize = admin.getCacheStatus(GetCacheStatusRequest.getDefaultInstance()).getSize();
+    assertTrue(cacheSize > 0);
+    var restrictedAdmin =
+        withBearer(DecisionEngineAdminServiceGrpc.newBlockingStub(channel), evaluatorToken);
+    assertStatus(
+        Status.Code.PERMISSION_DENIED,
+        () ->
+            restrictedAdmin.clearCompiledRulesCache(
+                ClearCompiledRulesCacheRequest.getDefaultInstance()));
+    assertEquals(
+        cacheSize, admin.getCacheStatus(GetCacheStatusRequest.getDefaultInstance()).getSize());
   }
 
   private static void verifyCrossTenantRulesetIsolation(
@@ -308,11 +496,11 @@ class DecisionEngineContainerConformanceTest {
   }
 
   private static void verifyBothTenantDatabasesExist(
-      PostgreSQLContainer<?> postgres, TenantDatabase databaseA, TenantDatabase databaseB)
+      PostgreSqlTestContainer postgres, TenantDatabase databaseA, TenantDatabase databaseB)
       throws Exception {
     try (Connection admin =
             DriverManager.getConnection(
-                postgres.getJdbcUrl(), POSTGRES_SUPERUSER, POSTGRES_SUPERUSER_PASSWORD);
+                postgres.hostJdbcUrl(), POSTGRES_SUPERUSER, POSTGRES_SUPERUSER_PASSWORD);
         Statement statement = admin.createStatement();
         ResultSet rows =
             statement.executeQuery(
@@ -331,13 +519,12 @@ class DecisionEngineContainerConformanceTest {
   }
 
   private static void verifyPhysicalDatabaseIsolation(
-      PostgreSQLContainer<?> postgres,
+      PostgreSqlTestContainer postgres,
       TenantDatabase databaseA,
       TenantDatabase databaseB,
       String ruleset)
       throws Exception {
-    String urlPrefix =
-        "jdbc:postgresql://" + postgres.getHost() + ":" + postgres.getMappedPort(5432) + "/";
+    String urlPrefix = "jdbc:postgresql://" + postgres.host() + ":" + postgres.mappedPort() + "/";
     assertOnlyRowIn(urlPrefix + databaseA.value(), ruleset, "tenant-a-rule");
     assertOnlyRowIn(urlPrefix + databaseB.value(), ruleset, "tenant-b-rule");
   }
@@ -362,9 +549,10 @@ class DecisionEngineContainerConformanceTest {
     }
   }
 
-  private static <S extends AbstractStub<S>> S withTenant(S stub, TenantId tenantId) {
+  private static <S extends AbstractStub<S>> S withBearer(S stub, String token) {
     Metadata headers = new Metadata();
-    headers.put(TrustingMetadataTenantResolver.TENANT_ID_HEADER, tenantId.value().toString());
+    headers.put(
+        Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER), "Bearer " + token);
     return stub.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(headers));
   }
 

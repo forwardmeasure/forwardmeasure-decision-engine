@@ -46,9 +46,6 @@
             <artifactId>decision-engine-api-language-bindings-java-grpc</artifactId>
         </dependency>
         <dependency>
-            <!-- TrustingMetadataTenantResolver.TENANT_ID_HEADER - the exact gRPC metadata key real
-                 services read tenant identity from, reused here rather than a duplicated string
-                 literal that could silently drift from the real one. -->
             <groupId>${project.groupId}</groupId>
             <artifactId>decision-engine-grpc</artifactId>
         </dependency>
@@ -100,5 +97,79 @@
             <artifactId>gson</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.authzen</groupId>
+            <artifactId>forwardmeasure-authzen-testkit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.testcontainers</groupId>
+            <artifactId>forwardmeasure-testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.openworkflow</groupId>
+            <artifactId>openworkflow-migrations</artifactId>
+            <version>${forwardmeasure.openworkflow.version}</version>
+            <type>pom</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-database-migration-service</artifactId>
+            <version>${project.version}</version>
+            <type>pom</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-quarkus</artifactId>
+            <version>${project.version}</version>
+            <type>pom</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-spring</artifactId>
+            <version>${project.version}</version>
+            <type>pom</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>decision-engine-micronaut</artifactId>
+            <version>${project.version}</version>
+            <type>pom</type>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+    <properties>
+        <decision.engine.conformance.live>false</decision.engine.conformance.live>
+    </properties>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <decision.engine.conformance.live>${decision.engine.conformance.live}</decision.engine.conformance.live>
+                        <decision.engine.image.registry-migration>${container-image.registry}/${container-image.group}/openworkflow-migrations:${forwardmeasure.openworkflow.version}</decision.engine.image.registry-migration>
+                        <decision.engine.image.migration>${container-image.registry}/${container-image.group}/decision-engine-database-migration-service:${container-image.tag}</decision.engine.image.migration>
+                        <decision.engine.image.quarkus>${container-image.registry}/${container-image.group}/decision-engine-quarkus:${container-image.tag}</decision.engine.image.quarkus>
+                        <decision.engine.image.spring>${container-image.registry}/${container-image.group}/decision-engine-spring:${container-image.tag}</decision.engine.image.spring>
+                        <decision.engine.image.micronaut>${container-image.registry}/${container-image.group}/decision-engine-micronaut:${container-image.tag}</decision.engine.image.micronaut>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+    <profiles>
+        <profile>
+            <id>full-suite</id>
+            <properties>
+                <decision.engine.conformance.live>true</decision.engine.conformance.live>
+            </properties>
+        </profile>
+    </profiles>
 </project>
