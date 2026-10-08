@@ -15,7 +15,11 @@ ruleset persistence, physical database isolation and tenant-separated stateful w
 same ruleset/version/session key. Negative calls cover unauthenticated callers, audience/tenant
 conflicts and denied permissions; an evaluator cannot replace rules or clear caches. PostgreSQL
 and Keycloak use shared fixtures; migration jobs own provisioning, with SQL limited to read-only
-observations. Shared Valkey fixture consolidation remains outstanding.
+observations. Valkey now also uses the shared authenticated fixture. Its three real lifecycle/
+authentication tests passed; FDE's full 26-module production/test build and all three packaged
+conformance cases then passed again with that fixture:
+`/tmp/fde-authenticated-shared-fixtures-conformance-20261008.log`, BUILD SUCCESS, 1m46s,
+zero failures/errors/skips. No service image rebuild was needed for the test-only consolidation.
 
 The first live run found a shared test-fixture defect (overlapping grants used UNANIMOUS rather
 than production's AFFIRMATIVE strategy) and a production Micronaut readiness defect: its probe

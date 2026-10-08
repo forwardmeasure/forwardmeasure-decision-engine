@@ -41,6 +41,7 @@ import com.forwardmeasure.jpa.tenancy.TenantDatabase;
 import com.forwardmeasure.jpa.tenancy.TenantId;
 import com.forwardmeasure.testcontainers.postgresql.PostgreSqlContainerConfiguration;
 import com.forwardmeasure.testcontainers.postgresql.PostgreSqlTestContainer;
+import com.forwardmeasure.testcontainers.valkey.ValkeyTestContainer;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import io.grpc.ManagedChannel;
@@ -89,7 +90,6 @@ import org.testcontainers.containers.wait.strategy.Wait;
 class DecisionEngineContainerConformanceTest {
   private static final Logger LOG =
       LoggerFactory.getLogger(DecisionEngineContainerConformanceTest.class);
-  private static final String VALKEY_IMAGE = "valkey/valkey:8.1";
   private static final String AUDIENCE = "decision-engine-api";
   private static final String TEST_CLIENT_SECRET = "conformance-client-secret";
   private static final String POSTGRES_SUPERUSER = "postgres";
@@ -123,15 +123,7 @@ class DecisionEngineContainerConformanceTest {
                         PostgreSqlContainerConfiguration.DEFAULT_MEMORY_BYTES,
                         PostgreSqlContainerConfiguration.DEFAULT_MEMORY_SWAP_BYTES)
                     .withNetwork(network.getId(), List.of("postgres")));
-        GenericContainer<?> valkey =
-            new GenericContainer<>(VALKEY_IMAGE)
-                .withNetwork(network)
-                .withNetworkAliases("valkey")
-                .withExposedPorts(6379)
-                .withCreateContainerCmdModifier(
-                    command -> command.getHostConfig().withMemory(256L * 1024 * 1024))
-                .withCommand("--requirepass", "valkey-password")
-                .waitingFor(Wait.forListeningPort());
+        ValkeyTestContainer valkey = new ValkeyTestContainer(network, "valkey", "valkey-password");
         GenericContainer<?> registryMigration = registryMigration(network);
         GenericContainer<?> migration = migration(network);
         GenericContainer<?> service = service(network, framework, identity)) {

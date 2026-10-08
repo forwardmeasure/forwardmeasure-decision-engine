@@ -113,6 +113,11 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>com.forwardmeasure.testcontainers</groupId>
+            <artifactId>forwardmeasure-testcontainers-valkey</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>com.forwardmeasure.openworkflow</groupId>
             <artifactId>openworkflow-migrations</artifactId>
             <version>${forwardmeasure.openworkflow.version}</version>
