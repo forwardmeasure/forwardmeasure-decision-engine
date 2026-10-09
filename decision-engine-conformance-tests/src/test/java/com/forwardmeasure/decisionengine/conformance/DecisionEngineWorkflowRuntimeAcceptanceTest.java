@@ -331,6 +331,11 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
     try {
       org.awaitility.Awaitility.await()
           .atMost(Duration.ofSeconds(60))
+          .ignoreExceptionsMatching(
+              failure ->
+                  failure instanceof io.grpc.StatusRuntimeException status
+                      && (status.getStatus().getCode() == io.grpc.Status.Code.UNAVAILABLE
+                          || status.getStatus().getCode() == io.grpc.Status.Code.DEADLINE_EXCEEDED))
           .untilAsserted(
               () ->
                   assertEquals(
