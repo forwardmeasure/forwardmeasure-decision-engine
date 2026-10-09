@@ -234,6 +234,8 @@ class DecisionEngineValkeyDeploymentAcceptanceTest {
           "kubectl",
           "--kubeconfig",
           kubeconfig.toString(),
+          "--namespace",
+          NAMESPACE,
           "apply",
           "-f",
           manifest.toString());
