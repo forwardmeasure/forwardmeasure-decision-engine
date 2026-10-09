@@ -153,8 +153,9 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
         if (pekko) runtime.awaitPekkoClusterReady(engine, adapter);
         // Source contracts come from the production API specification module via test resources.
         String proto =
-            runtime.startAsyncApiDocumentServer(
+            runtime.startDocumentServer(
                 "/evaluation.proto",
+                "text/x-protobuf",
                 resource("/META-INF/proto/forwardmeasure/decisionengine/v1/evaluation.proto"));
         String workflow =
             resource("/META-INF/decision-engine/workflows/evaluate.yaml")
