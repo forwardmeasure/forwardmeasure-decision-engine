@@ -47,6 +47,7 @@ class VerifiedJwtTenantResolverTest {
   static void startFixture() {
     KEYCLOAK = AuthzenKeycloakFixture.start();
     KEYCLOAK.provisionTenant(ORGANIZATION_ALIAS, TENANT_DID, ROLE);
+    KEYCLOAK.grantTokenAudience(AuthzenKeycloakFixture.CLIENT_ID, AuthzenKeycloakFixture.CLIENT_ID);
     TOKEN = KEYCLOAK.mintUserToken();
   }
 
@@ -94,30 +95,44 @@ class VerifiedJwtTenantResolverTest {
   }
 
   @Test
-  void rejectsATokenWhoseOrganizationRolesLiveOnADifferentClient() {
-    // Same real, signature-valid token - only the client id VerifiedJwtTenantResolver reads
-    // nested resource_access roles under changes, mirroring KeycloakOrganizationClaimsTest's own
-    // "leaked top-level role must not authorize" precedent: a client this actor holds no
-    // Organization-scoped roles on must not resolve, even with an otherwise-valid, correctly
-    // issued token.
+  void rolesFromAnotherClientDoNotGrantRolesToTheAuthenticatedOrganization() {
+    // AuthZEN intentionally authenticates an organization member with no roles for this client.
+    // Operation authorization then denies access; tenant resolution must not steal another
+    // client's roles or mislabel a valid identity as an authentication failure.
+    var headers = headers("Bearer " + TOKEN);
+    var authorizedClient = resolver().resolveOrganization(headers);
+    assertEquals(java.util.Set.of(ROLE), authorizedClient.organizationRoles());
     VerifiedJwtTenantResolver resolver =
         new VerifiedJwtTenantResolver(
             jwksUri(),
             KEYCLOAK.issuer().toString(),
             "a-client-with-no-role-mapping",
             AuthzenKeycloakFixture.CLIENT_ID);
-    assertThrows(
-        TenantResolutionException.class, () -> resolver.resolve(headers("Bearer " + TOKEN)));
+    var otherClient = resolver.resolveOrganization(headers);
+    assertEquals(authorizedClient.tenantId(), otherClient.tenantId());
+    assertEquals(authorizedClient.actorId(), otherClient.actorId());
+    assertEquals(java.util.Set.of(), otherClient.organizationRoles());
   }
 
   @Test
   void rejectsForgedClaimsWithTheOriginalSignature() throws Exception {
     String[] parts = TOKEN.split("\\.");
     var json = new com.fasterxml.jackson.databind.ObjectMapper();
-    var claims = (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(java.util.Base64.getUrlDecoder().decode(parts[1]));
+    var claims =
+        (com.fasterxml.jackson.databind.node.ObjectNode)
+            json.readTree(java.util.Base64.getUrlDecoder().decode(parts[1]));
     claims.put("sub", "forged-actor");
-    String forged = parts[0] + "." + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(json.writeValueAsBytes(claims)) + "." + parts[2];
-    var failure = assertThrows(TenantResolutionException.class, () -> resolver().resolve(headers("Bearer " + forged)));
+    String forged =
+        parts[0]
+            + "."
+            + java.util.Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(json.writeValueAsBytes(claims))
+            + "."
+            + parts[2];
+    var failure =
+        assertThrows(
+            TenantResolutionException.class, () -> resolver().resolve(headers("Bearer " + forged)));
     assertInstanceOf(com.nimbusds.jose.proc.BadJWSException.class, failure.getCause());
   }
 
@@ -126,14 +141,22 @@ class VerifiedJwtTenantResolverTest {
     var resolver = resolver();
     var metadata = headers("Bearer " + TOKEN);
     assertEquals(TenantId.parse(TENANT_UUID.toString()), resolver.resolve(metadata));
-    metadata.put(Metadata.Key.of("tenant-id", Metadata.ASCII_STRING_MARSHALLER), UUID.randomUUID().toString());
+    metadata.put(
+        Metadata.Key.of("tenant-id", Metadata.ASCII_STRING_MARSHALLER),
+        UUID.randomUUID().toString());
     assertThrows(TenantResolutionException.class, () -> resolver.resolve(metadata));
   }
 
   @Test
   void rejectsWrongAudienceWithoutChangingTheIssuerOrOrganizationRoles() {
-    var resolver = new VerifiedJwtTenantResolver(jwksUri(), KEYCLOAK.issuer().toString(), AuthzenKeycloakFixture.CLIENT_ID, "another-service");
-    assertThrows(TenantResolutionException.class, () -> resolver.resolve(headers("Bearer " + TOKEN)));
+    var resolver =
+        new VerifiedJwtTenantResolver(
+            jwksUri(),
+            KEYCLOAK.issuer().toString(),
+            AuthzenKeycloakFixture.CLIENT_ID,
+            "another-service");
+    assertThrows(
+        TenantResolutionException.class, () -> resolver.resolve(headers("Bearer " + TOKEN)));
   }
 
   private static VerifiedJwtTenantResolver resolver() {

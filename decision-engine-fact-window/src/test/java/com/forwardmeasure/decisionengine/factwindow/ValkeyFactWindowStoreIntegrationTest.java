@@ -27,9 +27,15 @@ class ValkeyFactWindowStoreIntegrationTest {
     try (var valkey = new ValkeyTestContainer("window-test-password").start();
         var store = store(valkey)) {
       assertTrue(store.isHealthy());
-      assertEquals(List.of(Map.of("n", 1)), store.appendAndLoad("payments", 1, "session", Map.of("n", 1), 2, 5));
-      assertEquals(List.of(Map.of("n", 1), Map.of("n", 2)), store.appendAndLoad("payments", 1, "session", Map.of("n", 2), 2, 30));
-      assertEquals(List.of(Map.of("n", 2), Map.of("n", 3)), store.appendAndLoad("payments", 1, "session", Map.of("n", 3), 2, 30));
+      assertEquals(
+          List.of(Map.of("n", 1)),
+          store.appendAndLoad("payments", 1, "session", Map.of("n", 1), 2, 5));
+      assertEquals(
+          List.of(Map.of("n", 1), Map.of("n", 2)),
+          store.appendAndLoad("payments", 1, "session", Map.of("n", 2), 2, 30));
+      assertEquals(
+          List.of(Map.of("n", 2), Map.of("n", 3)),
+          store.appendAndLoad("payments", 1, "session", Map.of("n", 3), 2, 30));
       long ttl = store.ttlSeconds("payments", 1, "session");
       assertTrue(ttl > 5 && ttl <= 30, "An append must refresh the earlier five-second expiry");
     }
@@ -41,10 +47,18 @@ class ValkeyFactWindowStoreIntegrationTest {
         var store = store(valkey)) {
       store.appendAndLoad("a:1", 2, "b", Map.of("scope", "first"), 8, 30);
       // These components collided when joined with ':' without independent encoding.
-      assertEquals(List.of(Map.of("scope", "second")), store.appendAndLoad("a", 1, "2:b", Map.of("scope", "second"), 8, 30));
-      assertEquals(List.of(Map.of("scope", "version")), store.appendAndLoad("a:1", 3, "b", Map.of("scope", "version"), 8, 30));
-      assertEquals(List.of(Map.of("scope", "session")), store.appendAndLoad("a:1", 2, "b/別", Map.of("scope", "session"), 8, 30));
-      assertEquals(List.of(Map.of("scope", "first"), Map.of("scope", "again")), store.appendAndLoad("a:1", 2, "b", Map.of("scope", "again"), 8, 30));
+      assertEquals(
+          List.of(Map.of("scope", "second")),
+          store.appendAndLoad("a", 1, "2:b", Map.of("scope", "second"), 8, 30));
+      assertEquals(
+          List.of(Map.of("scope", "version")),
+          store.appendAndLoad("a:1", 3, "b", Map.of("scope", "version"), 8, 30));
+      assertEquals(
+          List.of(Map.of("scope", "session")),
+          store.appendAndLoad("a:1", 2, "b/別", Map.of("scope", "session"), 8, 30));
+      assertEquals(
+          List.of(Map.of("scope", "first"), Map.of("scope", "again")),
+          store.appendAndLoad("a:1", 2, "b", Map.of("scope", "again"), 8, 30));
     }
   }
 
@@ -53,14 +67,22 @@ class ValkeyFactWindowStoreIntegrationTest {
     try (var valkey = new ValkeyTestContainer("window-test-password").start();
         var store = store(valkey)) {
       store.appendAndLoad("payments", 1, "session", Map.of("n", 1), 8, 30);
-      var client = RedisClient.create(RedisURI.Builder.redis(valkey.host(), valkey.port()).withPassword(valkey.password().toCharArray()).build());
+      var client =
+          RedisClient.create(
+              RedisURI.Builder.redis(valkey.host(), valkey.port())
+                  .withPassword(valkey.password().toCharArray())
+                  .build());
       try (var connection = client.connect()) {
         connection.sync().scriptFlush();
       } finally {
         client.shutdown();
       }
-      assertEquals(List.of(Map.of("n", 1), Map.of("n", 2)), store.appendAndLoad("payments", 1, "session", Map.of("n", 2), 8, 30));
-      assertEquals(List.of(Map.of("n", 1), Map.of("n", 2), Map.of("n", 3)), store.appendAndLoad("payments", 1, "session", Map.of("n", 3), 8, 30));
+      assertEquals(
+          List.of(Map.of("n", 1), Map.of("n", 2)),
+          store.appendAndLoad("payments", 1, "session", Map.of("n", 2), 8, 30));
+      assertEquals(
+          List.of(Map.of("n", 1), Map.of("n", 2), Map.of("n", 3)),
+          store.appendAndLoad("payments", 1, "session", Map.of("n", 3), 8, 30));
     }
   }
 
@@ -72,13 +94,18 @@ class ValkeyFactWindowStoreIntegrationTest {
       var tasks = new java.util.ArrayList<java.util.concurrent.Future<?>>();
       for (int i = 0; i < 24; i++) {
         int identity = i;
-        tasks.add(threads.submit(() -> {
-          var fact = Map.<String, Object>of("n", identity);
-          var window = store.appendAndLoad("payments", 1, "shared", fact, 8, 30);
-          assertTrue(window.size() <= 8);
-          assertEquals(fact, window.getLast(), "Another writer must not interleave between append and read");
-          assertEquals(window.size(), window.stream().distinct().count());
-        }));
+        tasks.add(
+            threads.submit(
+                () -> {
+                  var fact = Map.<String, Object>of("n", identity);
+                  var window = store.appendAndLoad("payments", 1, "shared", fact, 8, 30);
+                  assertTrue(window.size() <= 8);
+                  assertEquals(
+                      fact,
+                      window.getLast(),
+                      "Another writer must not interleave between append and read");
+                  assertEquals(window.size(), window.stream().distinct().count());
+                }));
       }
       for (var task : tasks) task.get(10, TimeUnit.SECONDS);
       assertEquals(8, store.appendAndLoad("payments", 1, "shared", Map.of("n", 24), 8, 30).size());
@@ -92,11 +119,16 @@ class ValkeyFactWindowStoreIntegrationTest {
         first.appendAndLoad("payments", 1, "session", Map.of("n", 1), 8, 30);
       }
       try (var reopened = store(valkey)) {
-        assertEquals(List.of(Map.of("n", 1), Map.of("n", 2)), reopened.appendAndLoad("payments", 1, "session", Map.of("n", 2), 8, 1));
+        assertEquals(
+            List.of(Map.of("n", 1), Map.of("n", 2)),
+            reopened.appendAndLoad("payments", 1, "session", Map.of("n", 2), 8, 1));
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (reopened.ttlSeconds("payments", 1, "session") != -2 && System.nanoTime() < deadline) Thread.sleep(25);
+        while (reopened.ttlSeconds("payments", 1, "session") != -2 && System.nanoTime() < deadline)
+          Thread.sleep(25);
         assertEquals(-2, reopened.ttlSeconds("payments", 1, "session"), "Idle window must expire");
-        assertEquals(List.of(Map.of("n", 3)), reopened.appendAndLoad("payments", 1, "session", Map.of("n", 3), 8, 30));
+        assertEquals(
+            List.of(Map.of("n", 3)),
+            reopened.appendAndLoad("payments", 1, "session", Map.of("n", 3), 8, 30));
       }
     }
   }
@@ -106,13 +138,20 @@ class ValkeyFactWindowStoreIntegrationTest {
     try (var valkey = new ValkeyTestContainer("window-test-password").start();
         var store = store(valkey)) {
       for (int[] bounds : new int[][] {{0, 30}, {-1, 30}, {8, 0}, {8, -1}}) {
-        assertThrows(IllegalArgumentException.class, () -> store.appendAndLoad("payments", 1, "session", Map.of("rejected", true), bounds[0], bounds[1]));
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                store.appendAndLoad(
+                    "payments", 1, "session", Map.of("rejected", true), bounds[0], bounds[1]));
       }
-      assertEquals(List.of(Map.of("accepted", true)), store.appendAndLoad("payments", 1, "session", Map.of("accepted", true), 8, 30));
+      assertEquals(
+          List.of(Map.of("accepted", true)),
+          store.appendAndLoad("payments", 1, "session", Map.of("accepted", true), 8, 30));
     }
   }
 
   private static ValkeyFactWindowStore store(ValkeyTestContainer valkey) {
-    return new ValkeyFactWindowStore(valkey.host(), valkey.port(), valkey.password(), new ObjectMapper());
+    return new ValkeyFactWindowStore(
+        valkey.host(), valkey.port(), valkey.password(), new ObjectMapper());
   }
 }

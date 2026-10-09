@@ -218,10 +218,14 @@ class DecisionEngineContainerConformanceTest {
     if (!java.nio.file.Files.isRegularFile(path)) {
       throw new IllegalArgumentException("Coverage agent is not a regular file: " + path);
     }
-    service.withCopyFileToContainer(org.testcontainers.utility.MountableFile.forHostPath(path), "/tmp/acceptance-jacoco-agent.jar");
+    service.withCopyFileToContainer(
+        org.testcontainers.utility.MountableFile.forHostPath(path),
+        "/tmp/acceptance-jacoco-agent.jar");
     service.addExposedPort(6300);
-    service.withEnv("JAVA_TOOL_OPTIONS", service.getEnvMap().get("JAVA_TOOL_OPTIONS")
-        + " -javaagent:/tmp/acceptance-jacoco-agent.jar=output=tcpserver,address=0.0.0.0,port=6300,includes=com.forwardmeasure.decisionengine.*");
+    service.withEnv(
+        "JAVA_TOOL_OPTIONS",
+        service.getEnvMap().get("JAVA_TOOL_OPTIONS")
+            + " -javaagent:/tmp/acceptance-jacoco-agent.jar=output=tcpserver,address=0.0.0.0,port=6300,includes=com.forwardmeasure.decisionengine.*");
   }
 
   private static void dumpCoverage(GenericContainer<?> service) throws java.io.IOException {
@@ -230,8 +234,12 @@ class DecisionEngineContainerConformanceTest {
     dump.setDump(true);
     dump.setReset(false);
     var execution = dump.dump(service.getHost(), service.getMappedPort(6300));
-    assertFalse(execution.getExecutionDataStore().getContents().isEmpty(), "Service JVM must supply actual coverage data");
-    var destination = java.nio.file.Path.of(System.getProperty("decision.engine.conformance.jacoco-output", "target/jacoco.exec"));
+    assertFalse(
+        execution.getExecutionDataStore().getContents().isEmpty(),
+        "Service JVM must supply actual coverage data");
+    var destination =
+        java.nio.file.Path.of(
+            System.getProperty("decision.engine.conformance.jacoco-output", "target/jacoco.exec"));
     java.nio.file.Files.createDirectories(destination.toAbsolutePath().getParent());
     execution.save(destination.toFile(), true);
   }
@@ -428,6 +436,7 @@ class DecisionEngineContainerConformanceTest {
       // role actually works for every construct this project supports.
       verifyStatelessDatasets(managementA, evaluationA, adminA, suffix);
       verifyVersionLifecycle(managementA, evaluationA, suffix);
+      verifyRejectedChangesPreserveActiveRules(managementA, evaluationA, adminA, suffix);
       verifyStatefulDataset(managementA, evaluationA, framework, suffix);
       assertStatus(
           Status.Code.INVALID_ARGUMENT,
@@ -663,39 +672,76 @@ class DecisionEngineContainerConformanceTest {
   private static void verifyVersionLifecycle(
       RulesetManagementServiceGrpc.RulesetManagementServiceBlockingStub management,
       EvaluationServiceGrpc.EvaluationServiceBlockingStub evaluation,
-      String suffix) throws Exception {
+      String suffix)
+      throws Exception {
     String ruleset = "conformance/lifecycle" + suffix;
-    var first = create(management, ruleset, sharedNameDrl("first"), RulesetMode.STATELESS, 0, 0, true);
-    var second = create(management, ruleset, sharedNameDrl("second"), RulesetMode.STATELESS, 0, 0, false);
+    var first =
+        create(management, ruleset, sharedNameDrl("first"), RulesetMode.STATELESS, 0, 0, true);
+    var second =
+        create(management, ruleset, sharedNameDrl("second"), RulesetMode.STATELESS, 0, 0, false);
     assertEquals(1, first.getVersion());
     assertEquals(2, second.getVersion());
     assertFalse(second.getActive());
     var input = request(ruleset, Map.of("go", true), "");
-    assertEquals("first", evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
-    assertEquals("second", evaluation.evaluate(input.toBuilder().setRulesetVersion(2).build()).getResult().getFieldsOrThrow("outcome").getStringValue());
+    assertEquals(
+        "first",
+        evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
+    assertEquals(
+        "second",
+        evaluation
+            .evaluate(input.toBuilder().setRulesetVersion(2).build())
+            .getResult()
+            .getFieldsOrThrow("outcome")
+            .getStringValue());
 
     var list = ListRulesetVersionsRequest.newBuilder().setRuleset(ruleset).setLimit(1);
     var page = management.listRulesetVersions(list.build());
-    assertEquals(List.of(1L), page.getItemsList().stream().map(RulesetVersion::getVersion).toList());
+    assertEquals(
+        List.of(1L), page.getItemsList().stream().map(RulesetVersion::getVersion).toList());
     var next = management.listRulesetVersions(list.setCursor(page.getNextCursor()).build());
-    assertEquals(List.of(2L), next.getItemsList().stream().map(RulesetVersion::getVersion).toList());
+    assertEquals(
+        List.of(2L), next.getItemsList().stream().map(RulesetVersion::getVersion).toList());
 
-    management.activateRulesetVersion(ActivateRulesetVersionRequest.newBuilder().setRuleset(ruleset).setVersion(2).build());
-    assertEquals(2, management.getActiveRulesetVersion(GetActiveRulesetVersionRequest.newBuilder().setRuleset(ruleset).build()).getVersion());
-    assertEquals("second", evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
+    management.activateRulesetVersion(
+        ActivateRulesetVersionRequest.newBuilder().setRuleset(ruleset).setVersion(2).build());
+    assertEquals(
+        2,
+        management
+            .getActiveRulesetVersion(
+                GetActiveRulesetVersionRequest.newBuilder().setRuleset(ruleset).build())
+            .getVersion());
+    assertEquals(
+        "second",
+        evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
     var deletion = DeleteRulesetVersionRequest.newBuilder().setRuleset(ruleset);
-    assertStatus(Status.Code.FAILED_PRECONDITION, () -> management.deleteRulesetVersion(deletion.setVersion(2).build()));
+    assertStatus(
+        Status.Code.FAILED_PRECONDITION,
+        () -> management.deleteRulesetVersion(deletion.setVersion(2).build()));
     assertTrue(management.deleteRulesetVersion(deletion.setVersion(1).build()).getDeleted());
-    assertStatus(Status.Code.NOT_FOUND, () -> evaluation.evaluate(input.toBuilder().setRulesetVersion(1).build()));
+    assertStatus(
+        Status.Code.NOT_FOUND,
+        () -> evaluation.evaluate(input.toBuilder().setRulesetVersion(1).build()));
 
-    var discarded = create(management, ruleset, sharedNameDrl("discarded"), RulesetMode.STATELESS, 0, 0, false);
+    var discarded =
+        create(management, ruleset, sharedNameDrl("discarded"), RulesetMode.STATELESS, 0, 0, false);
     assertEquals(3, discarded.getVersion());
     // Compile this identity before deletion: a reused version would return stale cached rules.
-    assertEquals("discarded", evaluation.evaluate(input.toBuilder().setRulesetVersion(3).build()).getResult().getFieldsOrThrow("outcome").getStringValue());
+    assertEquals(
+        "discarded",
+        evaluation
+            .evaluate(input.toBuilder().setRulesetVersion(3).build())
+            .getResult()
+            .getFieldsOrThrow("outcome")
+            .getStringValue());
     assertTrue(management.deleteRulesetVersion(deletion.setVersion(3).build()).getDeleted());
-    var replacement = create(management, ruleset, sharedNameDrl("replacement"), RulesetMode.STATELESS, 0, 0, true);
-    assertEquals(4, replacement.getVersion(), "Deleted versions must never reuse a compiled-rule identity");
-    assertEquals("replacement", evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
+    var replacement =
+        create(
+            management, ruleset, sharedNameDrl("replacement"), RulesetMode.STATELESS, 0, 0, true);
+    assertEquals(
+        4, replacement.getVersion(), "Deleted versions must never reuse a compiled-rule identity");
+    assertEquals(
+        "replacement",
+        evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
 
     // Real concurrent RPCs must serialize version allocation, without replacing the active rule.
     try (var callers = java.util.concurrent.Executors.newFixedThreadPool(4)) {
@@ -704,11 +750,20 @@ class DecisionEngineContainerConformanceTest {
       var pending = new ArrayList<java.util.concurrent.Future<RulesetVersion>>();
       for (int i = 0; i < 4; i++) {
         int caller = i;
-        pending.add(callers.submit(() -> {
-          ready.countDown();
-          assertTrue(start.await(10, java.util.concurrent.TimeUnit.SECONDS));
-          return create(management, ruleset, sharedNameDrl("concurrent" + caller), RulesetMode.STATELESS, 0, 0, false);
-        }));
+        pending.add(
+            callers.submit(
+                () -> {
+                  ready.countDown();
+                  assertTrue(start.await(10, java.util.concurrent.TimeUnit.SECONDS));
+                  return create(
+                      management.withDeadlineAfter(20, java.util.concurrent.TimeUnit.SECONDS),
+                      ruleset,
+                      sharedNameDrl("concurrent" + caller),
+                      RulesetMode.STATELESS,
+                      0,
+                      0,
+                      false);
+                }));
       }
       try {
         assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS));
@@ -719,15 +774,155 @@ class DecisionEngineContainerConformanceTest {
       for (var future : pending) {
         var created = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
         assertFalse(created.getActive());
-        assertTrue(versions.add(created.getVersion()), "Concurrent callers must not share a version");
+        assertTrue(
+            versions.add(created.getVersion()), "Concurrent callers must not share a version");
       }
       assertEquals(Set.of(5L, 6L, 7L, 8L), versions);
     }
-    assertEquals(4, management.getActiveRulesetVersion(GetActiveRulesetVersionRequest.newBuilder().setRuleset(ruleset).build()).getVersion());
-    assertEquals("replacement", evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
+    assertEquals(
+        4,
+        management
+            .getActiveRulesetVersion(
+                GetActiveRulesetVersionRequest.newBuilder().setRuleset(ruleset).build())
+            .getVersion());
+    assertEquals(
+        "replacement",
+        evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
     for (String invalid : List.of("-1", "not-a-version")) {
-      assertStatus(Status.Code.INVALID_ARGUMENT, () -> management.listRulesetVersions(ListRulesetVersionsRequest.newBuilder().setRuleset(ruleset).setCursor(invalid).build()));
+      assertStatus(
+          Status.Code.INVALID_ARGUMENT,
+          () ->
+              management.listRulesetVersions(
+                  ListRulesetVersionsRequest.newBuilder()
+                      .setRuleset(ruleset)
+                      .setCursor(invalid)
+                      .build()));
     }
+  }
+
+  private static void verifyRejectedChangesPreserveActiveRules(
+      RulesetManagementServiceGrpc.RulesetManagementServiceBlockingStub management,
+      EvaluationServiceGrpc.EvaluationServiceBlockingStub evaluation,
+      DecisionEngineAdminServiceGrpc.DecisionEngineAdminServiceBlockingStub admin,
+      String suffix) {
+    String ruleset = "conformance/validation" + suffix;
+    var valid =
+        CreateRulesetVersionRequest.newBuilder()
+            .setRuleset(ruleset)
+            .setDrl(sharedNameDrl("unchanged"))
+            .setMode(RulesetMode.STATELESS)
+            .setCreatedBy("untrusted-request-actor")
+            .setActivate(true)
+            .build();
+    var original = management.createRulesetVersion(valid);
+    assertFalse(original.getCreatedBy().isBlank());
+    assertNotEquals(
+        "untrusted-request-actor",
+        original.getCreatedBy(),
+        "Persist the authenticated actor rather than trusting caller-supplied attribution");
+    var active = GetActiveRulesetVersionRequest.newBuilder().setRuleset(ruleset).build();
+    // Compare stored state before/after rejection. PostgreSQL rounds the creation timestamp to
+    // microseconds, while the immediate create response still carries the JVM's nanoseconds.
+    var persisted = management.getActiveRulesetVersion(active);
+    assertEquals(
+        original.toBuilder().clearCreatedAt().build(),
+        persisted.toBuilder().clearCreatedAt().build());
+    var listing = ListRulesetVersionsRequest.newBuilder().setRuleset(ruleset).build();
+    var input = request(ruleset, Map.of("go", true), "");
+    for (var invalid :
+        List.of(
+            valid.toBuilder().setModeValue(0).build(),
+            valid.toBuilder().setModeValue(9876).build(),
+            valid.toBuilder()
+                .setDrl("package conformance; rule \"missingGlobal\" when then end")
+                .build(),
+            valid.toBuilder().setDrl("global java.util.Map result;\n" + valid.getDrl()).build(),
+            valid.toBuilder()
+                .setDrl("global java.util.Map result;\nrule \"broken\" when ??? then end")
+                .build(),
+            valid.toBuilder()
+                .setMode(RulesetMode.STATEFUL)
+                .setMaxWindowSize(0)
+                .setIdleTimeoutSeconds(30)
+                .build(),
+            valid.toBuilder()
+                .setMode(RulesetMode.STATEFUL)
+                .setMaxWindowSize(4)
+                .setIdleTimeoutSeconds(0)
+                .build())) {
+      assertStatus(Status.Code.INVALID_ARGUMENT, () -> management.createRulesetVersion(invalid));
+      assertEquals(
+          persisted,
+          management.getActiveRulesetVersion(active),
+          "A rejected update must not deactivate or replace the working version");
+      assertEquals(
+          List.of(persisted),
+          management.listRulesetVersions(listing).getItemsList(),
+          "A failed compilation or validation must not persist a partial version");
+      assertEquals(
+          "unchanged",
+          evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
+    }
+    for (String invalidName : List.of("", "bad-name", "x".repeat(256))) {
+      assertStatus(
+          Status.Code.INVALID_ARGUMENT,
+          () -> management.createRulesetVersion(valid.toBuilder().setRuleset(invalidName).build()));
+    }
+    String absent = ruleset + "/absent";
+    assertStatus(
+        Status.Code.FAILED_PRECONDITION,
+        () ->
+            management.createRulesetVersion(
+                valid.toBuilder().setRuleset(absent).setActivate(false).build()));
+    assertStatus(
+        Status.Code.NOT_FOUND,
+        () ->
+            management.getActiveRulesetVersion(
+                GetActiveRulesetVersionRequest.newBuilder().setRuleset(absent).build()));
+    assertTrue(
+        management
+            .listRulesetVersions(ListRulesetVersionsRequest.newBuilder().setRuleset(absent).build())
+            .getItemsList()
+            .isEmpty());
+    assertStatus(
+        Status.Code.NOT_FOUND,
+        () ->
+            management.activateRulesetVersion(
+                ActivateRulesetVersionRequest.newBuilder()
+                    .setRuleset(ruleset)
+                    .setVersion(999)
+                    .build()));
+    assertStatus(
+        Status.Code.NOT_FOUND,
+        () ->
+            management.deleteRulesetVersion(
+                DeleteRulesetVersionRequest.newBuilder()
+                    .setRuleset(ruleset)
+                    .setVersion(999)
+                    .build()));
+    assertStatus(
+        Status.Code.NOT_FOUND,
+        () ->
+            admin.warmRuleset(
+                WarmRulesetRequest.newBuilder().setRuleset(ruleset).setVersion(999).build()));
+    for (var invalid :
+        List.of(
+            WarmRulesetRequest.newBuilder().setVersion(1).build(),
+            WarmRulesetRequest.newBuilder().setRuleset(ruleset).setVersion(0).build())) {
+      assertStatus(Status.Code.INVALID_ARGUMENT, () -> admin.warmRuleset(invalid));
+      assertStatus(
+          Status.Code.INVALID_ARGUMENT,
+          () ->
+              admin.unloadRuleset(
+                  UnloadRulesetRequest.newBuilder()
+                      .setRuleset(invalid.getRuleset())
+                      .setVersion(invalid.getVersion())
+                      .build()));
+    }
+    assertEquals(persisted, management.getActiveRulesetVersion(active));
+    assertEquals(
+        "unchanged",
+        evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
   }
 
   private static void verifyStatefulDataset(
