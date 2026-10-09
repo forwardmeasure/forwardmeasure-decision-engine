@@ -394,6 +394,8 @@ class DecisionEngineValkeyDeploymentAcceptanceTest {
                       .getItems();
               assertEquals(1, pods.size());
               assertTrue(pods.get(0).getMetadata().getDeletionTimestamp() == null);
+              assertTrue(pods.get(0).getStatus() != null);
+              assertTrue(pods.get(0).getStatus().getConditions() != null);
               assertTrue(
                   pods.get(0).getStatus().getConditions().stream()
                       .anyMatch(
