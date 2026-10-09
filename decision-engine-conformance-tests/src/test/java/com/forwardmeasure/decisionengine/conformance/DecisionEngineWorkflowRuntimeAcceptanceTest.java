@@ -324,10 +324,21 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
   }
 
   private static void awaitReady(org.testcontainers.containers.GenericContainer<?> service) {
-    var channel =
-        ManagedChannelBuilder.forAddress(service.getHost(), service.getMappedPort(9000))
-            .usePlaintext()
-            .build();
+    // Docker can reassign an ephemeral published port on restart. GenericContainer's
+    // getMappedPort reads its cached initial inspection; use the current Docker mapping.
+    var current = service.getCurrentContainerInfo();
+    assertTrue(
+        Boolean.TRUE.equals(current.getState().getRunning()), "Restarted FDE container is running");
+    var binding =
+        current
+            .getNetworkSettings()
+            .getPorts()
+            .getBindings()
+            .get(com.github.dockerjava.api.model.ExposedPort.tcp(9000));
+    int port = Integer.parseInt(binding[0].getHostPortSpec());
+    System.out.println(
+        "FDE readiness port after restart: " + service.getMappedPort(9000) + " -> " + port);
+    var channel = ManagedChannelBuilder.forAddress(service.getHost(), port).usePlaintext().build();
     try {
       org.awaitility.Awaitility.await()
           .atMost(Duration.ofSeconds(60))
