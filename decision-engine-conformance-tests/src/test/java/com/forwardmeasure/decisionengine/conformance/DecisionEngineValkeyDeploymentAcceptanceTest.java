@@ -189,7 +189,7 @@ class DecisionEngineValkeyDeploymentAcceptanceTest {
                                   "repositories",
                                   Map.of(framework, repository),
                                   "tag",
-                                  "fixture",
+                                  image(framework).substring(image(framework).lastIndexOf(':') + 1),
                                   "digests",
                                   Map.of(framework, digest),
                                   "pullPolicy",
