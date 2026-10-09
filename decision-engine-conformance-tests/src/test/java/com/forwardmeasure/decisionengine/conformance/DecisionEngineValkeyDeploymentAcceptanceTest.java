@@ -52,10 +52,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.Network;
 
@@ -63,15 +65,24 @@ import org.testcontainers.containers.Network;
 class DecisionEngineValkeyDeploymentAcceptanceTest {
   private static final String NAMESPACE = "fde-acceptance";
 
+  static Stream<Arguments> deployments() {
+    String selection = System.getProperty("decision.engine.acceptance.deployment", "");
+    var selected =
+        Stream.of("quarkus", "spring", "micronaut")
+            .flatMap(
+                framework ->
+                    Stream.of("embedded", "external")
+                        .filter(
+                            mode -> selection.isBlank() || selection.equals(framework + "/" + mode))
+                        .map(mode -> Arguments.of(framework, mode)))
+            .toList();
+    if (selected.isEmpty())
+      throw new IllegalArgumentException("Unknown FDE deployment: " + selection);
+    return selected.stream();
+  }
+
   @ParameterizedTest(name = "{0}/{1}")
-  @CsvSource({
-    "quarkus,embedded",
-    "quarkus,external",
-    "spring,embedded",
-    "spring,external",
-    "micronaut,embedded",
-    "micronaut,external"
-  })
+  @MethodSource("deployments")
   @Timeout(900)
   void renderedDeploymentUsesAuthenticatedValkeyAndRetainsFactsOnPodReplacement(
       String framework, String mode) throws Exception {

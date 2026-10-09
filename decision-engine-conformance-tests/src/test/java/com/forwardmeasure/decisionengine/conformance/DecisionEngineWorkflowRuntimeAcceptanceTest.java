@@ -61,7 +61,7 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
       RealFowfWorkflowFixture.PekkoPersistence persistence) {}
 
   static Stream<Runtime> runtimes() {
-    return Stream.of(RealFowfWorkflowFixture.Framework.values())
+    var all = Stream.of(RealFowfWorkflowFixture.Framework.values())
         .flatMap(
             framework ->
                 Stream.of(
@@ -72,7 +72,24 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
                     new Runtime(
                         framework, "pekko", RealFowfWorkflowFixture.PekkoPersistence.POSTGRESQL),
                     new Runtime(
-                        framework, "pekko", RealFowfWorkflowFixture.PekkoPersistence.CASSANDRA)));
+                        framework, "pekko", RealFowfWorkflowFixture.PekkoPersistence.CASSANDRA)))
+            .toList();
+    String selection = System.getProperty("fowf.acceptance.runtime", "");
+    var selected =
+        all.stream()
+            .filter(
+                runtime ->
+                    selection.isBlank()
+                        || selection.equals(
+                            runtime.framework().name().toLowerCase(Locale.ROOT)
+                                + "/"
+                                + runtime.engine()
+                                + "/"
+                                + runtime.persistence().name().toLowerCase(Locale.ROOT)))
+            .toList();
+    if (selected.isEmpty())
+      throw new IllegalArgumentException("Unknown workflow runtime: " + selection);
+    return selected.stream();
   }
 
   @ParameterizedTest(name = "{0}")
