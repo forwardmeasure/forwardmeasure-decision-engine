@@ -23,14 +23,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.forwardmeasure.authzen.testkit.AuthzenKeycloakFixture;
 import com.forwardmeasure.decisionengine.conformance.fixture.GoldenDataset;
+import com.forwardmeasure.decisionengine.contract.v1.ActivateRulesetVersionRequest;
 import com.forwardmeasure.decisionengine.contract.v1.ClearCompiledRulesCacheRequest;
 import com.forwardmeasure.decisionengine.contract.v1.CreateRulesetVersionRequest;
 import com.forwardmeasure.decisionengine.contract.v1.DecisionEngineAdminServiceGrpc;
+import com.forwardmeasure.decisionengine.contract.v1.DeleteRulesetVersionRequest;
 import com.forwardmeasure.decisionengine.contract.v1.EvaluationRequest;
 import com.forwardmeasure.decisionengine.contract.v1.EvaluationServiceGrpc;
 import com.forwardmeasure.decisionengine.contract.v1.GetActiveRulesetVersionRequest;
 import com.forwardmeasure.decisionengine.contract.v1.GetCacheStatusRequest;
 import com.forwardmeasure.decisionengine.contract.v1.GetStatisticsRequest;
+import com.forwardmeasure.decisionengine.contract.v1.ListRulesetVersionsRequest;
 import com.forwardmeasure.decisionengine.contract.v1.RulesetManagementServiceGrpc;
 import com.forwardmeasure.decisionengine.contract.v1.RulesetMode;
 import com.forwardmeasure.decisionengine.contract.v1.RulesetVersion;
@@ -162,6 +165,7 @@ class DecisionEngineContainerConformanceTest {
       assertEquals(0, registryMigration.getCurrentContainerInfo().getState().getExitCodeLong());
       migration.start();
       assertEquals(0, migration.getCurrentContainerInfo().getState().getExitCodeLong());
+      configureCoverage(service);
       service.start();
       // Mint short-lived credentials after image startup so infrastructure startup time does
       // not consume the authenticated scenario's token lifetime.
@@ -203,7 +207,33 @@ class DecisionEngineContainerConformanceTest {
           postgres,
           databaseA,
           databaseB);
+      dumpCoverage(service);
     }
+  }
+
+  private static void configureCoverage(GenericContainer<?> service) {
+    String agent = System.getProperty("decision.engine.conformance.jacoco-agent", "");
+    if (agent.isBlank()) return;
+    var path = java.nio.file.Path.of(agent);
+    if (!java.nio.file.Files.isRegularFile(path)) {
+      throw new IllegalArgumentException("Coverage agent is not a regular file: " + path);
+    }
+    service.withCopyFileToContainer(org.testcontainers.utility.MountableFile.forHostPath(path), "/tmp/acceptance-jacoco-agent.jar");
+    service.addExposedPort(6300);
+    service.withEnv("JAVA_TOOL_OPTIONS", service.getEnvMap().get("JAVA_TOOL_OPTIONS")
+        + " -javaagent:/tmp/acceptance-jacoco-agent.jar=output=tcpserver,address=0.0.0.0,port=6300,includes=com.forwardmeasure.decisionengine.*");
+  }
+
+  private static void dumpCoverage(GenericContainer<?> service) throws java.io.IOException {
+    if (System.getProperty("decision.engine.conformance.jacoco-agent", "").isBlank()) return;
+    var dump = new org.jacoco.core.tools.ExecDumpClient();
+    dump.setDump(true);
+    dump.setReset(false);
+    var execution = dump.dump(service.getHost(), service.getMappedPort(6300));
+    assertFalse(execution.getExecutionDataStore().getContents().isEmpty(), "Service JVM must supply actual coverage data");
+    var destination = java.nio.file.Path.of(System.getProperty("decision.engine.conformance.jacoco-output", "target/jacoco.exec"));
+    java.nio.file.Files.createDirectories(destination.toAbsolutePath().getParent());
+    execution.save(destination.toFile(), true);
   }
 
   static String token(
@@ -397,6 +427,7 @@ class DecisionEngineContainerConformanceTest {
       // separately below); still real end-to-end proof that tenant A's own database/schema/runtime
       // role actually works for every construct this project supports.
       verifyStatelessDatasets(managementA, evaluationA, adminA, suffix);
+      verifyVersionLifecycle(managementA, evaluationA, suffix);
       verifyStatefulDataset(managementA, evaluationA, framework, suffix);
       assertStatus(
           Status.Code.INVALID_ARGUMENT,
@@ -626,6 +657,76 @@ class DecisionEngineContainerConformanceTest {
               .setVersion(active.getVersion())
               .build());
       admin.clearCompiledRulesCache(ClearCompiledRulesCacheRequest.getDefaultInstance());
+    }
+  }
+
+  private static void verifyVersionLifecycle(
+      RulesetManagementServiceGrpc.RulesetManagementServiceBlockingStub management,
+      EvaluationServiceGrpc.EvaluationServiceBlockingStub evaluation,
+      String suffix) throws Exception {
+    String ruleset = "conformance/lifecycle" + suffix;
+    var first = create(management, ruleset, sharedNameDrl("first"), RulesetMode.STATELESS, 0, 0, true);
+    var second = create(management, ruleset, sharedNameDrl("second"), RulesetMode.STATELESS, 0, 0, false);
+    assertEquals(1, first.getVersion());
+    assertEquals(2, second.getVersion());
+    assertFalse(second.getActive());
+    var input = request(ruleset, Map.of("go", true), "");
+    assertEquals("first", evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
+    assertEquals("second", evaluation.evaluate(input.toBuilder().setRulesetVersion(2).build()).getResult().getFieldsOrThrow("outcome").getStringValue());
+
+    var list = ListRulesetVersionsRequest.newBuilder().setRuleset(ruleset).setLimit(1);
+    var page = management.listRulesetVersions(list.build());
+    assertEquals(List.of(1L), page.getItemsList().stream().map(RulesetVersion::getVersion).toList());
+    var next = management.listRulesetVersions(list.setCursor(page.getNextCursor()).build());
+    assertEquals(List.of(2L), next.getItemsList().stream().map(RulesetVersion::getVersion).toList());
+
+    management.activateRulesetVersion(ActivateRulesetVersionRequest.newBuilder().setRuleset(ruleset).setVersion(2).build());
+    assertEquals(2, management.getActiveRulesetVersion(GetActiveRulesetVersionRequest.newBuilder().setRuleset(ruleset).build()).getVersion());
+    assertEquals("second", evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
+    var deletion = DeleteRulesetVersionRequest.newBuilder().setRuleset(ruleset);
+    assertStatus(Status.Code.FAILED_PRECONDITION, () -> management.deleteRulesetVersion(deletion.setVersion(2).build()));
+    assertTrue(management.deleteRulesetVersion(deletion.setVersion(1).build()).getDeleted());
+    assertStatus(Status.Code.NOT_FOUND, () -> evaluation.evaluate(input.toBuilder().setRulesetVersion(1).build()));
+
+    var discarded = create(management, ruleset, sharedNameDrl("discarded"), RulesetMode.STATELESS, 0, 0, false);
+    assertEquals(3, discarded.getVersion());
+    // Compile this identity before deletion: a reused version would return stale cached rules.
+    assertEquals("discarded", evaluation.evaluate(input.toBuilder().setRulesetVersion(3).build()).getResult().getFieldsOrThrow("outcome").getStringValue());
+    assertTrue(management.deleteRulesetVersion(deletion.setVersion(3).build()).getDeleted());
+    var replacement = create(management, ruleset, sharedNameDrl("replacement"), RulesetMode.STATELESS, 0, 0, true);
+    assertEquals(4, replacement.getVersion(), "Deleted versions must never reuse a compiled-rule identity");
+    assertEquals("replacement", evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
+
+    // Real concurrent RPCs must serialize version allocation, without replacing the active rule.
+    try (var callers = java.util.concurrent.Executors.newFixedThreadPool(4)) {
+      var ready = new java.util.concurrent.CountDownLatch(4);
+      var start = new java.util.concurrent.CountDownLatch(1);
+      var pending = new ArrayList<java.util.concurrent.Future<RulesetVersion>>();
+      for (int i = 0; i < 4; i++) {
+        int caller = i;
+        pending.add(callers.submit(() -> {
+          ready.countDown();
+          assertTrue(start.await(10, java.util.concurrent.TimeUnit.SECONDS));
+          return create(management, ruleset, sharedNameDrl("concurrent" + caller), RulesetMode.STATELESS, 0, 0, false);
+        }));
+      }
+      try {
+        assertTrue(ready.await(10, java.util.concurrent.TimeUnit.SECONDS));
+      } finally {
+        start.countDown();
+      }
+      var versions = new java.util.HashSet<Long>();
+      for (var future : pending) {
+        var created = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        assertFalse(created.getActive());
+        assertTrue(versions.add(created.getVersion()), "Concurrent callers must not share a version");
+      }
+      assertEquals(Set.of(5L, 6L, 7L, 8L), versions);
+    }
+    assertEquals(4, management.getActiveRulesetVersion(GetActiveRulesetVersionRequest.newBuilder().setRuleset(ruleset).build()).getVersion());
+    assertEquals("replacement", evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStringValue());
+    for (String invalid : List.of("-1", "not-a-version")) {
+      assertStatus(Status.Code.INVALID_ARGUMENT, () -> management.listRulesetVersions(ListRulesetVersionsRequest.newBuilder().setRuleset(ruleset).setCursor(invalid).build()));
     }
   }
 

@@ -8,6 +8,7 @@
 package com.forwardmeasure.decisionengine.grpc.tenancy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.forwardmeasure.authzen.testkit.AuthzenKeycloakFixture;
@@ -51,7 +52,7 @@ class VerifiedJwtTenantResolverTest {
 
   @AfterAll
   static void stopFixture() {
-    KEYCLOAK.close();
+    if (KEYCLOAK != null) KEYCLOAK.close();
   }
 
   @Test
@@ -84,7 +85,10 @@ class VerifiedJwtTenantResolverTest {
   void rejectsATokenSignedForADifferentExpectedIssuer() {
     VerifiedJwtTenantResolver resolver =
         new VerifiedJwtTenantResolver(
-            jwksUri(), "http://issuer.example.test/realms/some-other-realm", "unused-client-id");
+            jwksUri(),
+            "http://issuer.example.test/realms/some-other-realm",
+            AuthzenKeycloakFixture.CLIENT_ID,
+            AuthzenKeycloakFixture.CLIENT_ID);
     assertThrows(
         TenantResolutionException.class, () -> resolver.resolve(headers("Bearer " + TOKEN)));
   }
@@ -98,9 +102,38 @@ class VerifiedJwtTenantResolverTest {
     // issued token.
     VerifiedJwtTenantResolver resolver =
         new VerifiedJwtTenantResolver(
-            jwksUri(), KEYCLOAK.issuer().toString(), "a-client-with-no-role-mapping");
+            jwksUri(),
+            KEYCLOAK.issuer().toString(),
+            "a-client-with-no-role-mapping",
+            AuthzenKeycloakFixture.CLIENT_ID);
     assertThrows(
         TenantResolutionException.class, () -> resolver.resolve(headers("Bearer " + TOKEN)));
+  }
+
+  @Test
+  void rejectsForgedClaimsWithTheOriginalSignature() throws Exception {
+    String[] parts = TOKEN.split("\\.");
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    var claims = (com.fasterxml.jackson.databind.node.ObjectNode) json.readTree(java.util.Base64.getUrlDecoder().decode(parts[1]));
+    claims.put("sub", "forged-actor");
+    String forged = parts[0] + "." + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(json.writeValueAsBytes(claims)) + "." + parts[2];
+    var failure = assertThrows(TenantResolutionException.class, () -> resolver().resolve(headers("Bearer " + forged)));
+    assertInstanceOf(com.nimbusds.jose.proc.BadJWSException.class, failure.getCause());
+  }
+
+  @Test
+  void rejectsConflictingTenantMetadataOnAnOtherwiseValidToken() {
+    var resolver = resolver();
+    var metadata = headers("Bearer " + TOKEN);
+    assertEquals(TenantId.parse(TENANT_UUID.toString()), resolver.resolve(metadata));
+    metadata.put(Metadata.Key.of("tenant-id", Metadata.ASCII_STRING_MARSHALLER), UUID.randomUUID().toString());
+    assertThrows(TenantResolutionException.class, () -> resolver.resolve(metadata));
+  }
+
+  @Test
+  void rejectsWrongAudienceWithoutChangingTheIssuerOrOrganizationRoles() {
+    var resolver = new VerifiedJwtTenantResolver(jwksUri(), KEYCLOAK.issuer().toString(), AuthzenKeycloakFixture.CLIENT_ID, "another-service");
+    assertThrows(TenantResolutionException.class, () -> resolver.resolve(headers("Bearer " + TOKEN)));
   }
 
   private static VerifiedJwtTenantResolver resolver() {

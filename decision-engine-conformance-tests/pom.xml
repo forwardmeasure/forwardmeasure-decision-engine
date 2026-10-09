@@ -41,6 +41,13 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- Dump opt-in coverage from the real service JVM before its disposable container closes. -->
+        <dependency>
+            <groupId>org.jacoco</groupId>
+            <artifactId>org.jacoco.core</artifactId>
+            <version>${jacoco.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib</artifactId>

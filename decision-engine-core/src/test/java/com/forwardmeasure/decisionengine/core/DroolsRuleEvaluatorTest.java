@@ -149,6 +149,76 @@ class DroolsRuleEvaluatorTest {
     return new RulesetVersion("payments", number, drl, true, mode, 10, 60, null, "test");
   }
 
+  @Test
+  void exactFiringLimitSucceedsButOverflowStopsBeforeAnExtraConsequence() {
+    String drl =
+        """
+        package limits;
+        global java.util.Map result;
+        rule "increment"
+        when
+          $fact : java.util.Map(this["count"] < this["target"])
+        then
+          $fact.put("count", ((Integer) $fact.get("count")) + 1);
+          result.put("outcome", "counted");
+          update($fact);
+        end
+        """;
+    var evaluator = new DroolsRuleEvaluator(source(version(RulesetMode.STATELESS, 1, drl)), null, new DrlCompiler(), 2, 3);
+    try {
+      var exact = new java.util.HashMap<String, Object>(Map.of("count", 0, "target", 3));
+      var outcome = evaluator.evaluate(new EvaluationInput("payments", null, exact, null));
+      assertEquals(List.of("increment", "increment", "increment"), outcome.firedRules());
+      assertEquals(3, exact.get("count"));
+      var overflow = new java.util.HashMap<String, Object>(Map.of("count", 0, "target", 4));
+      var failure = assertThrows(RuleEvaluationException.class, () -> evaluator.evaluate(new EvaluationInput("payments", null, overflow, null)));
+      assertEquals(RuleEvaluationException.Reason.EVALUATION_FAILURE, failure.reason());
+      assertEquals(3, overflow.get("count"), "The excess consequence must not execute");
+      assertEquals(1, evaluator.statistics().successCount());
+      assertEquals(1, evaluator.statistics().failureCount());
+    } finally {
+      evaluator.clearCache();
+    }
+  }
+
+  @Test
+  void independentEvaluatorsCannotShareSameNamedVersionThroughTheGlobalKieRepository() {
+    var first = new DroolsRuleEvaluator(source(version(RulesetMode.STATELESS, 1, APPROVAL_RULE)), null);
+    var second = new DroolsRuleEvaluator(source(version(RulesetMode.STATELESS, 1, APPROVAL_RULE.replace("\"approved\");", "\"review\");"))), null);
+    try {
+      // Warm both before either creates a session: KIE's process-wide module registry must not
+      // let a second tenant's same name/version replace the first tenant's compiled rules.
+      first.warm("payments", 1);
+      second.warm("payments", 1);
+      var input = new EvaluationInput("payments", null, Map.of("approved", true), null);
+      assertEquals("approved", first.evaluate(input).result().get("outcome"));
+      assertEquals("review", second.evaluate(input).result().get("outcome"));
+      second.clearCache();
+      assertEquals("approved", first.evaluate(input).result().get("outcome"), "Disposing one tenant's module must not remove the other tenant's rules");
+    } finally {
+      first.clearCache();
+      second.clearCache();
+    }
+  }
+
+  @Test
+  void missingOrFailedFactStorageCannotReturnAStatelessSuccess() {
+    FactWindowStore unavailable = (ruleset, version, session, fact, bound, ttl) -> {
+      throw new IllegalStateException("fact store unavailable");
+    };
+    for (FactWindowStore store : new FactWindowStore[] {null, unavailable}) {
+      var evaluator = new DroolsRuleEvaluator(source(version(RulesetMode.STATEFUL, 1, APPROVAL_RULE)), store);
+      try {
+        var failure = assertThrows(RuleEvaluationException.class, () -> evaluator.evaluate(new EvaluationInput("payments", null, Map.of("approved", true), "session")));
+        assertEquals(RuleEvaluationException.Reason.FACT_WINDOW_UNAVAILABLE, failure.reason());
+        assertEquals(0, evaluator.statistics().successCount());
+        assertEquals(1, evaluator.statistics().failureCount());
+      } finally {
+        evaluator.clearCache();
+      }
+    }
+  }
+
   private static RulesetSource source(RulesetVersion version) {
     return new RulesetSource() {
       @Override

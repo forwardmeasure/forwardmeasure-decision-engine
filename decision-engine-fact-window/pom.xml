@@ -66,8 +66,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>testcontainers</artifactId>
+            <groupId>com.forwardmeasure.testcontainers</groupId>
+            <artifactId>forwardmeasure-testcontainers-valkey</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

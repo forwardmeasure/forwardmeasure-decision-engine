@@ -133,10 +133,14 @@ class RulesetVersionPersistenceIntegrationTest {
     private final DroolsRuleEvaluator evaluator;
 
     private Harness(PostgreSqlTestContainer database, TenantSchema schema) {
+      // default_schema qualifies ORM tables, but the durable counter and advisory lock use
+      // native queries. Point the physical connection at the same migrated tenant schema.
+      String jdbcUrl = database.hostJdbcUrl();
+      jdbcUrl += (jdbcUrl.contains("?") ? "&" : "?") + "currentSchema=" + schema.value();
       Configuration configuration =
           new Configuration()
               .addAnnotatedClass(RulesetVersionEntity.class)
-              .setProperty("jakarta.persistence.jdbc.url", database.hostJdbcUrl())
+              .setProperty("jakarta.persistence.jdbc.url", jdbcUrl)
               .setProperty("jakarta.persistence.jdbc.user", database.username())
               .setProperty("jakarta.persistence.jdbc.password", database.password())
               .setProperty("jakarta.persistence.jdbc.driver", "org.postgresql.Driver")
