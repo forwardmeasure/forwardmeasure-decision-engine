@@ -61,18 +61,23 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
       RealFowfWorkflowFixture.PekkoPersistence persistence) {}
 
   static Stream<Runtime> runtimes() {
-    var all = Stream.of(RealFowfWorkflowFixture.Framework.values())
-        .flatMap(
-            framework ->
-                Stream.of(
-                    new Runtime(
-                        framework,
-                        "kafka-streams",
-                        RealFowfWorkflowFixture.PekkoPersistence.POSTGRESQL),
-                    new Runtime(
-                        framework, "pekko", RealFowfWorkflowFixture.PekkoPersistence.POSTGRESQL),
-                    new Runtime(
-                        framework, "pekko", RealFowfWorkflowFixture.PekkoPersistence.CASSANDRA)))
+    var all =
+        Stream.of(RealFowfWorkflowFixture.Framework.values())
+            .flatMap(
+                framework ->
+                    Stream.of(
+                        new Runtime(
+                            framework,
+                            "kafka-streams",
+                            RealFowfWorkflowFixture.PekkoPersistence.POSTGRESQL),
+                        new Runtime(
+                            framework,
+                            "pekko",
+                            RealFowfWorkflowFixture.PekkoPersistence.POSTGRESQL),
+                        new Runtime(
+                            framework,
+                            "pekko",
+                            RealFowfWorkflowFixture.PekkoPersistence.CASSANDRA)))
             .toList();
     String selection = System.getProperty("fowf.acceptance.runtime", "");
     var selected =
@@ -187,6 +192,24 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
           channel.shutdownNow();
         }
         String api = endpoint(execution);
+        // The public timer view must be populated by the packaged engine, not synthetic events.
+        UUID waitRevision =
+            publish(
+                definitions,
+                caller,
+                """
+                document: {dsl: '1.0.3', namespace: acceptance, name: activity-wait, version: '1.0.0'}
+                do:
+                  - pause: {wait: PT1S}
+                  - finish: {set: {finished: true}}
+                """);
+        JsonNode waited = invoke(runtime, api, waitRevision, Map.of());
+        assertEquals("COMPLETED", waited.path("state").asText());
+        JsonNode timers = awaitActivities(runtime, api, waited, "timers", "FIRED");
+        assertTrue(timers.get(0).path("taskPath").asText().contains("pause"));
+        assertTrue(
+            java.time.Instant.parse(timers.get(0).path("dueAt").asText())
+                .isAfter(java.time.Instant.parse(timers.get(0).path("scheduledAt").asText())));
         String session = UUID.randomUUID().toString();
         Map<String, Object> input =
             Map.of(
@@ -208,6 +231,11 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
               identity.clientCredentialsToken("decision-allowed", TEST_CLIENT_SECRET));
           JsonNode result = invoke(runtime, api, revision, input);
           assertEquals("COMPLETED", result.path("state").asText(), result.toString());
+          JsonNode effects = awaitActivities(runtime, api, result, "effects", "COMPLETED");
+          assertEquals(1, effects.size(), "One gRPC invocation must produce one durable effect");
+          assertTrue(effects.get(0).path("taskPath").asText().contains("evaluate"));
+          assertFalse(effects.toString().contains(secretPath));
+          assertFalse(effects.toString().contains("authorization"));
           assertEquals("accepted", result.path("output").path("result").path("outcome").asText());
           assertEquals(count, result.path("output").path("factsConsidered").asInt());
           assertEquals(version, result.path("output").path("rulesetVersion").asLong());
@@ -246,6 +274,47 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
             "Rejected calls must not modify the allowed tenant's fact window");
       }
     }
+  }
+
+  private static JsonNode awaitActivities(
+      RealFowfWorkflowFixture runtime,
+      String api,
+      JsonNode execution,
+      String collection,
+      String state)
+      throws Exception {
+    String id = execution.path("id").asText();
+    assertFalse(id.isBlank());
+    var observed = new java.util.concurrent.atomic.AtomicReference<JsonNode>();
+    org.awaitility.Awaitility.await()
+        .atMost(Duration.ofSeconds(60))
+        .untilAsserted(
+            () -> {
+              JsonNode details =
+                  request(
+                      api,
+                      "/v1/workflow-executions/" + id,
+                      runtime
+                          .keycloak()
+                          .clientCredentialsToken("workflow-allowed", TEST_CLIENT_SECRET),
+                      "GET",
+                      null,
+                      null,
+                      200);
+              JsonNode activities = details.path(collection);
+              assertFalse(activities.isEmpty(), "Engine journal must populate " + collection);
+              for (JsonNode activity : activities) {
+                assertEquals(state, activity.path("state").asText(), activity.toString());
+                UUID.fromString(
+                    activity.path(collection.equals("timers") ? "timerId" : "effectId").asText());
+                java.time.Instant.parse(
+                    activity
+                        .path(collection.equals("timers") ? "resolvedAt" : "completedAt")
+                        .asText());
+              }
+              observed.set(activities);
+            });
+    return observed.get();
   }
 
   private static void awaitReady(org.testcontainers.containers.GenericContainer<?> service) {
