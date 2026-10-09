@@ -91,7 +91,7 @@ class DecisionEngineContainerConformanceTest {
   private static final Logger LOG =
       LoggerFactory.getLogger(DecisionEngineContainerConformanceTest.class);
   private static final String AUDIENCE = "decision-engine-api";
-  private static final String TEST_CLIENT_SECRET = "conformance-client-secret";
+  static final String TEST_CLIENT_SECRET = "conformance-client-secret";
   private static final String POSTGRES_SUPERUSER = "postgres";
   private static final String POSTGRES_SUPERUSER_PASSWORD = "postgres-password";
   private static final String RUNTIME_USERNAME = "decision_engine_runtime";
@@ -206,7 +206,7 @@ class DecisionEngineContainerConformanceTest {
     }
   }
 
-  private static String token(
+  static String token(
       AuthzenKeycloakFixture identity,
       String clientId,
       String organization,
@@ -218,14 +218,14 @@ class DecisionEngineContainerConformanceTest {
     return identity.clientCredentialsToken(clientId, TEST_CLIENT_SECRET);
   }
 
-  private static String image(String component) {
+  static String image(String component) {
     String image = System.getProperty("decision.engine.image." + component);
     if (image == null || image.isBlank())
       throw new IllegalStateException("Missing current image property for " + component);
     return image;
   }
 
-  private static GenericContainer<?> registryMigration(Network network) {
+  static GenericContainer<?> registryMigration(Network network) {
     return new GenericContainer<>(image("registry-migration"))
         .withImagePullPolicy(imageName -> false)
         .withCreateContainerCmdModifier(
@@ -245,7 +245,7 @@ class DecisionEngineContainerConformanceTest {
         .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("registry-migration"));
   }
 
-  private static GenericContainer<?> migration(Network network) {
+  static GenericContainer<?> migration(Network network) {
     return new GenericContainer<>(image("migration"))
         .withImagePullPolicy(imageName -> false)
         .withCreateContainerCmdModifier(
@@ -265,7 +265,7 @@ class DecisionEngineContainerConformanceTest {
         .withLogConsumer(new Slf4jLogConsumer(LOG).withPrefix("migration"));
   }
 
-  private static GenericContainer<?> service(
+  static GenericContainer<?> service(
       Network network, String framework, AuthzenKeycloakFixture identity) {
     return new GenericContainer<>(image(framework))
         .withImagePullPolicy(imageName -> false)
@@ -497,7 +497,7 @@ class DecisionEngineContainerConformanceTest {
         activeA.getDrl(), activeB.getDrl(), framework + ": tenants must never share stored DRL");
   }
 
-  private static String sharedNameDrl(String outcome) {
+  static String sharedNameDrl(String outcome) {
     return "package conformance;\n"
         + "global java.util.Map result;\n"
         + "rule \"shared\"\n"
@@ -564,7 +564,7 @@ class DecisionEngineContainerConformanceTest {
     }
   }
 
-  private static <S extends AbstractStub<S>> S withBearer(S stub, String token) {
+  static <S extends AbstractStub<S>> S withBearer(S stub, String token) {
     Metadata headers = new Metadata();
     headers.put(
         Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER), "Bearer " + token);
@@ -695,7 +695,7 @@ class DecisionEngineContainerConformanceTest {
                 request(ruleset, dataset.cases().get(0).input(), session + "-isolated")));
   }
 
-  private static RulesetVersion create(
+  static RulesetVersion create(
       RulesetManagementServiceGrpc.RulesetManagementServiceBlockingStub management,
       String ruleset,
       String drl,

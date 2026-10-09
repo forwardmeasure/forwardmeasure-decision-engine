@@ -42,6 +42,60 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-stdlib</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Shared real FOWF deployment and HTTP boundary helpers; no copied workflow runtime. -->
+        <dependency>
+            <groupId>com.forwardmeasure.datastreaming</groupId>
+            <artifactId>forwardmeasure-data-streaming-launcher-application</artifactId>
+            <version>${forwardmeasure.datastreaming.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.openworkflow</groupId>
+            <artifactId>openworkflow-definition-management-client-apachehttp</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.openworkflow</groupId>
+            <artifactId>openworkflow-definition-management-models</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.openworkflow</groupId>
+            <artifactId>openworkflow-authorization-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.testcontainers</groupId>
+            <artifactId>forwardmeasure-testcontainers-kafka</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.testcontainers</groupId>
+            <artifactId>forwardmeasure-testcontainers-cassandra</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.testcontainers</groupId>
+            <artifactId>forwardmeasure-testcontainers-kubernetes</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.forwardmeasure.testcontainers</groupId>
+            <artifactId>forwardmeasure-testcontainers-gcs</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
             <groupId>org.awaitility</groupId>
             <artifactId>awaitility</artifactId>
             <scope>test</scope>
@@ -157,6 +211,16 @@
         <decision.engine.conformance.live>false</decision.engine.conformance.live>
     </properties>
     <build>
+        <testResources>
+            <testResource><directory>src/test/resources</directory></testResource>
+            <testResource>
+                <directory>../decision-engine-api-specifications/src/main/resources</directory>
+                <includes>
+                    <include>META-INF/proto/forwardmeasure/decisionengine/v1/evaluation.proto</include>
+                    <include>META-INF/decision-engine/workflows/evaluate.yaml</include>
+                </includes>
+            </testResource>
+        </testResources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -164,6 +228,7 @@
                 <configuration>
                     <systemPropertyVariables>
                         <decision.engine.conformance.live>${decision.engine.conformance.live}</decision.engine.conformance.live>
+                        <openworkflow.image.tag>${forwardmeasure.openworkflow.version}</openworkflow.image.tag>
                         <decision.engine.image.registry-migration>${container-image.registry}/${container-image.group}/openworkflow-migrations:${forwardmeasure.openworkflow.version}</decision.engine.image.registry-migration>
                         <decision.engine.image.migration>${container-image.registry}/${container-image.group}/decision-engine-database-migration-service:${container-image.tag}</decision.engine.image.migration>
                         <decision.engine.image.quarkus>${container-image.registry}/${container-image.group}/decision-engine-quarkus:${container-image.tag}</decision.engine.image.quarkus>
