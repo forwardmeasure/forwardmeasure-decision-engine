@@ -269,6 +269,9 @@ class DecisionEngineContainerConformanceTest {
       Network network, String framework, AuthzenKeycloakFixture identity) {
     return new GenericContainer<>(image(framework))
         .withImagePullPolicy(imageName -> false)
+        .withEnv(
+            "JAVA_TOOL_OPTIONS",
+            System.getProperty("forwardmeasure.acceptance.java-tool-options", "-Xmx1g"))
         .withCreateContainerCmdModifier(
             command -> command.getHostConfig().withMemory(2L * 1024 * 1024 * 1024))
         .withNetwork(network)
