@@ -211,6 +211,7 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
         assertTrue(
             java.time.Instant.parse(timers.get(0).path("dueAt").asText())
                 .isAfter(java.time.Instant.parse(timers.get(0).path("scheduledAt").asText())));
+        System.out.println("FDE scenario passed: real workflow timer projection");
         String session = UUID.randomUUID().toString();
         Map<String, Object> input =
             Map.of(
@@ -242,6 +243,8 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
           assertEquals(version, result.path("output").path("rulesetVersion").asLong());
           assertEquals(session, result.path("output").path("correlationId").asText());
           assertFalse(result.path("output").path("firedRules").isEmpty());
+          System.out.println(
+              "FDE scenario passed: authorized evaluation and effect projection " + count);
           if (count == 1) {
             decision.getDockerClient().restartContainerCmd(decision.getContainerId()).exec();
             awaitReady(decision);
@@ -256,6 +259,7 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
         assertEquals("FAILED", rejected.path("state").asText(), rejected.toString());
         assertTrue(
             rejected.path("error").toString().contains("PERMISSION_DENIED"), rejected.toString());
+        System.out.println("FDE scenario passed: denied identity rejected");
         // An authorized identity in B must not resolve A's ruleset or accumulate A's facts.
         String isolated =
             token(identity, "decision-isolated", otherOrganization, "decision-admin", AUDIENCE);
@@ -263,6 +267,7 @@ class DecisionEngineWorkflowRuntimeAcceptanceTest {
         JsonNode hidden = invoke(runtime, api, revision, input);
         assertEquals("FAILED", hidden.path("state").asText(), hidden.toString());
         assertTrue(hidden.path("error").toString().contains("NOT_FOUND"), hidden.toString());
+        System.out.println("FDE scenario passed: tenant isolation");
         mountToken(
             adapter,
             secretPath,
