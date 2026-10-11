@@ -437,6 +437,7 @@ class DecisionEngineContainerConformanceTest {
       verifyStatelessDatasets(managementA, evaluationA, adminA, suffix);
       verifyVersionLifecycle(managementA, evaluationA, suffix);
       verifyRejectedChangesPreserveActiveRules(managementA, evaluationA, adminA, suffix);
+      verifyEvaluationWireContract(managementA, evaluationA, suffix);
       verifyStatefulDataset(managementA, evaluationA, framework, suffix);
       assertStatus(
           Status.Code.INVALID_ARGUMENT,
@@ -798,6 +799,103 @@ class DecisionEngineContainerConformanceTest {
                       .setCursor(invalid)
                       .build()));
     }
+  }
+
+  private static void verifyEvaluationWireContract(
+      RulesetManagementServiceGrpc.RulesetManagementServiceBlockingStub management,
+      EvaluationServiceGrpc.EvaluationServiceBlockingStub evaluation,
+      String suffix) {
+    String ruleset = "conformance/wire" + suffix;
+    create(
+        management,
+        ruleset,
+        """
+        package conformance;
+        global java.util.Map result;
+        rule "echo-nested-fact"
+        when
+          $fact : java.util.Map( this["go"] == true )
+        then
+          result.put("outcome", $fact.get("payload"));
+        end
+        """,
+        RulesetMode.STATELESS,
+        0,
+        0,
+        true);
+    Value nil = Value.newBuilder().setNullValue(com.google.protobuf.NullValue.NULL_VALUE).build();
+    Struct payload =
+        Struct.newBuilder()
+            .putFields("nil", nil)
+            .putFields(
+                "emptyObject",
+                Value.newBuilder().setStructValue(Struct.getDefaultInstance()).build())
+            .putFields(
+                "items",
+                Value.newBuilder()
+                    .setListValue(
+                        com.google.protobuf.ListValue.newBuilder()
+                            .addValues(nil)
+                            .addValues(Value.newBuilder().setBoolValue(false))
+                            .addValues(Value.newBuilder().setNumberValue(2.5))
+                            .addValues(Value.newBuilder().setStringValue("\u03a9"))
+                            .addValues(
+                                Value.newBuilder()
+                                    .setListValue(
+                                        com.google.protobuf.ListValue.getDefaultInstance())))
+                    .build())
+            .build();
+    var input =
+        EvaluationRequest.newBuilder()
+            .setRuleset(ruleset)
+            .setInput(
+                Struct.newBuilder()
+                    .putFields("go", Value.newBuilder().setBoolValue(true).build())
+                    .putFields("payload", Value.newBuilder().setStructValue(payload).build()))
+            .setCorrelationId("wire-\u03a9-" + suffix)
+            .build();
+    var response = evaluation.evaluate(input);
+    assertEquals(payload, response.getResult().getFieldsOrThrow("outcome").getStructValue());
+    assertEquals(input.getCorrelationId(), response.getCorrelationId());
+    assertEquals(java.util.List.of("echo-nested-fact"), response.getFiredRulesList());
+    assertEquals(1, response.getFactsConsidered());
+
+    for (var invalid :
+        java.util.List.of(
+            input.toBuilder().clearRuleset().build(),
+            input.toBuilder().clearInput().build(),
+            input.toBuilder().setRuleset("../invalid").build(),
+            input.toBuilder().setRulesetVersion(0).build(),
+            input.toBuilder().setRulesetVersion(-1).build())) {
+      assertStatus(Status.Code.INVALID_ARGUMENT, () -> evaluation.evaluate(invalid));
+    }
+    assertStatus(
+        Status.Code.NOT_FOUND,
+        () ->
+            evaluation.evaluate(
+                input.toBuilder().setRuleset("conformance/missing" + suffix).build()));
+
+    // Valid compiled rules can still produce values the public protobuf contract cannot represent.
+    // That is an evaluation precondition failure, never a partial success or stringified object.
+    int variant = 0;
+    for (String expression :
+        java.util.List.of("new java.lang.Object()", "java.util.Map.of(7, \"value\")")) {
+      String invalidRuleset = "conformance/unrepresentable" + (++variant) + suffix;
+      create(
+          management,
+          invalidRuleset,
+          sharedNameDrl("placeholder").replace("\"placeholder\"", expression),
+          RulesetMode.STATELESS,
+          0,
+          0,
+          true);
+      assertStatus(
+          Status.Code.FAILED_PRECONDITION,
+          () -> evaluation.evaluate(input.toBuilder().setRuleset(invalidRuleset).build()));
+    }
+    assertEquals(
+        payload,
+        evaluation.evaluate(input).getResult().getFieldsOrThrow("outcome").getStructValue());
   }
 
   private static void verifyRejectedChangesPreserveActiveRules(

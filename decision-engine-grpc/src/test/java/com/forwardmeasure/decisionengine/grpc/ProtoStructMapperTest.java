@@ -8,6 +8,7 @@
 package com.forwardmeasure.decisionengine.grpc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
@@ -16,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 class ProtoStructMapperTest {
   @Test
-  void convertsNestedStructsListsAndScalarsWithoutLosingShape() {
+  void convertsNestedStructsAndScalarsWithoutLosingShape() {
     Struct input =
         Struct.newBuilder()
             .putFields("name", Value.newBuilder().setStringValue("alice").build())
@@ -37,5 +38,45 @@ class ProtoStructMapperTest {
     assertEquals(true, result.get("enabled"));
     assertEquals(Map.of("score", 4.5), result.get("attributes"));
     assertEquals(input, ProtoStructMapper.toStruct(result));
+  }
+
+  @Test
+  void preservesNullsAndHeterogeneousNestedLists() {
+    var values = new java.util.ArrayList<Object>();
+    values.add(null);
+    values.add(false);
+    values.add(2.5);
+    values.add("\u03a9");
+    values.add(Map.of("child", java.util.List.of("first", "second")));
+    values.add(java.util.List.of());
+    Map<String, Object> original = Map.of("items", values, "emptyObject", Map.of());
+    assertEquals(original, ProtoStructMapper.toMap(ProtoStructMapper.toStruct(original)));
+  }
+
+  @Test
+  void anUnsetProtobufValueNormalizesToExplicitNullWithoutDroppingTheField() {
+    var input = Struct.newBuilder().putFields("present", Value.getDefaultInstance()).build();
+    var expected = new java.util.LinkedHashMap<String, Object>();
+    expected.put("present", null);
+    assertEquals(expected, ProtoStructMapper.toMap(input));
+    assertEquals(
+        Value.KindCase.NULL_VALUE,
+        ProtoStructMapper.toStruct(expected).getFieldsOrThrow("present").getKindCase());
+  }
+
+  @Test
+  void rejectsNonStringMapKeysAndUnsupportedNestedObjectsInsteadOfStringifyingThem() {
+    assertEquals(
+        "Struct map keys must be strings",
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoStructMapper.toStruct(Map.of("nested", Map.of(7, "value"))))
+            .getMessage());
+    assertEquals(
+        "value cannot be represented as protobuf Struct: java.lang.Object",
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoStructMapper.toStruct(Map.of("items", java.util.List.of(new Object()))))
+            .getMessage());
   }
 }
