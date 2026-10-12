@@ -6,7 +6,7 @@ document:
   dsl: '1.0.3'
   namespace: fde
   name: evaluate-decision
-  version: '1.0.0'
+  version: '1.0.1'
 use:
   secrets:
     - decision-engine-token
