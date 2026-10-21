@@ -22,9 +22,9 @@
 
     <parent>
         <groupId>com.forwardmeasure.decisionengine</groupId>
-        <artifactId>decision-engine-deployments</artifactId>
+        <artifactId>decision-engine-deployments-neutral-parent</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../parents/neutral/pom.xml</relativePath>
     </parent>
 
     <groupId>com.forwardmeasure.decisionengine</groupId>

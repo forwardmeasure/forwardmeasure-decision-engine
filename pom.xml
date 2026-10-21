@@ -86,6 +86,10 @@
     <!-- Module order follows IMPLEMENTATION-SPEC.md Section 2 exactly. Do not reorder without
          reordering the spec's own diagram to match. -->
     <modules>
+        <module>parents/micronaut</module>
+        <module>parents/spring</module>
+        <module>parents/quarkus</module>
+        <module>parents/neutral</module>
         <module>decision-engine-api-specifications</module>
         <module>decision-engine-api-language-bindings</module>
         <module>decision-engine-domain</module>
@@ -135,87 +139,87 @@
             <scope>import</scope>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-domain</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-jpa</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-fact-window</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-grpc</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-api-specifications</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-api-language-bindings-java-grpc</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-api-language-bindings-python-grpc</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-api-language-bindings-typescript-grpc</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-database-migrations</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-database-migration-service</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-quarkus</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-quarkus-binding</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-spring</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-spring-binding</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-micronaut</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>${project.groupId}</groupId>
+            <groupId>com.forwardmeasure.decisionengine</groupId>
             <artifactId>decision-engine-micronaut-binding</artifactId>
             <version>${project.version}</version>
         </dependency>
@@ -235,7 +239,12 @@
                         <compilerArgs>
                             <arg>-Xlint:all,-processing</arg>
                         </compilerArgs>
-                        <annotationProcessorPaths>
+                        <!-- Processor paths without a <version> (hibernate-processor) follow the module's managed
+                             version, so each framework's modules generate with that framework's Hibernate. -->
+                        <annotationProcessorPathsUseDepMgmt>true</annotationProcessorPathsUseDepMgmt>
+                        <!-- combine.self=override: replace the platform parent's list instead of merging it entry by entry,
+                             which would hand the versionless hibernate-processor the version of the parent's entry at the same position. -->
+                        <annotationProcessorPaths combine.self="override">
                             <path>
                                 <groupId>org.projectlombok</groupId>
                                 <artifactId>lombok</artifactId>
@@ -254,7 +263,6 @@
                             <path>
                                 <groupId>org.hibernate.orm</groupId>
                                 <artifactId>hibernate-processor</artifactId>
-                                <version>${hibernate.version}</version>
                             </path>
                         </annotationProcessorPaths>
                     </configuration>

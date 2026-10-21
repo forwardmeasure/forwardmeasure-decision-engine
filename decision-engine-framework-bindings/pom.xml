@@ -34,10 +34,6 @@
     <name>ForwardMeasure Decision Engine :: Framework Bindings</name>
     <description>Reusable Quarkus, Spring, and Micronaut integrations only. Executable entry points, runtime assembly, Dockerfiles, and container images live in decision-engine-deployments, matching the OpenWorkflow framework-bindings/openworkflow-deployments convention.</description>
 
-    <dependencyManagement>
-        <dependencies>
-        </dependencies>
-    </dependencyManagement>
 
     <modules>
         <module>quarkus</module>

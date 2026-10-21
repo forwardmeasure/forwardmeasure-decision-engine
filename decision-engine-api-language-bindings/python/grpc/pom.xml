@@ -22,9 +22,9 @@
 
     <parent>
         <groupId>com.forwardmeasure.decisionengine</groupId>
-        <artifactId>decision-engine-api-language-bindings-python</artifactId>
+        <artifactId>forwardmeasure-decision-engine-neutral-parent</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../../../parents/neutral/pom.xml</relativePath>
     </parent>
 
     <groupId>com.forwardmeasure.decisionengine</groupId>

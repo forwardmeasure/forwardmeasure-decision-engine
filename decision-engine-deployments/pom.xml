@@ -21,6 +21,10 @@
     <name>ForwardMeasure Decision Engine :: Deployments</name>
     <description>Executable decision-engine services and migration jobs. Framework integration remains in decision-engine-framework-bindings; these modules own application assembly, entry points, Dockerfiles, and container images.</description>
     <modules>
+        <module>parents/neutral</module>
+        <module>parents/micronaut</module>
+        <module>parents/spring</module>
+        <module>parents/quarkus</module>
         <module>quarkus</module>
         <module>spring</module>
         <module>micronaut</module>

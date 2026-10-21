@@ -22,9 +22,9 @@
 
     <parent>
         <groupId>com.forwardmeasure.decisionengine</groupId>
-        <artifactId>decision-engine-deployments</artifactId>
+        <artifactId>decision-engine-deployments-quarkus-parent</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../parents/quarkus/pom.xml</relativePath>
     </parent>
 
     <groupId>com.forwardmeasure.decisionengine</groupId>
@@ -36,27 +36,8 @@
 
     <properties>
         <container-image.name>decision-engine-quarkus</container-image.name>
-        <!-- Quarkus 3.39 pins Netty 4.1; Lettuce 7.x requires Netty 4.2's event-loop API. -->
     </properties>
 
-    <dependencyManagement>
-        <dependencies>
-        <dependency>
-            <groupId>com.forwardmeasure.platform</groupId>
-            <artifactId>forwardmeasure-platform-quarkus-bom</artifactId>
-            <version>${forwardmeasure.platform.version}</version>
-            <type>pom</type>
-            <scope>import</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.netty</groupId>
-            <artifactId>netty-bom</artifactId>
-            <version>${netty.version}</version>
-            <type>pom</type>
-            <scope>import</scope>
-        </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -120,7 +101,6 @@
         <dependency>
             <groupId>io.lettuce</groupId>
             <artifactId>lettuce-core</artifactId>
-            <version>${lettuce.quarkus.version}</version>
         </dependency>
     </dependencies>
 
