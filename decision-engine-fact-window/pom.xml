@@ -22,9 +22,9 @@
 
     <parent>
         <groupId>com.forwardmeasure.decisionengine</groupId>
-        <artifactId>forwardmeasure-decision-engine-parent</artifactId>
+        <artifactId>forwardmeasure-decision-engine-neutral-parent</artifactId>
         <version>${revision}</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../parents/neutral/pom.xml</relativePath>
     </parent>
 
     <groupId>com.forwardmeasure.decisionengine</groupId>
@@ -42,10 +42,8 @@
         <dependency>
             <groupId>io.lettuce</groupId>
             <artifactId>lettuce-core</artifactId>
-            <version>${lettuce.quarkus.version}</version>
-            <!-- Version supplied by forwardmeasure-platform's own dependencyManagement
-                 for the default non-framework build. Framework bindings use this Netty 4.1
-                 compatible driver because Quarkus currently supplies Netty 4.1 at runtime. -->
+            <!-- Version from the platform libraries BOM: the 6.x baseline, because Quarkus runs Netty 4.1
+                 (forwardmeasure-platform-quarkus-bom pins the same line); Spring and Micronaut run 7.x. -->
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
