@@ -25,6 +25,9 @@
 # Introduce that extra layer of indirection only if this repository's own deployment genuinely grows
 # past one logical stage - do not add it preemptively.
 helmDefaults:
+  # The charts are the only source of truth: on server-side apply, take back any field a manual
+  # kubectl set/patch/edit claimed, rather than failing the release on the conflict.
+  forceConflicts: true
   wait: true
   waitForJobs: true
   timeout: 1800
@@ -124,7 +127,7 @@ releases:
         didMethod: {{ .Values.platform.identity.didMethod | quote }}
         definitions:
           evaluate.yaml: |
-{{ readFile "../../decision-engine-api-specifications/src/main/resources/META-INF/decision-engine/workflows/evaluate.yaml" | replace "@FDE_HOST@" (printf "decision-engine.%s.svc.cluster.local" .Values.platform.namespaces.decisionEngine) | indent 12 }}
+{{ readFile "../../decision-engine-api-specifications/src/main/resources/META-INF/decision-engine/workflows/evaluate.yaml" | replace "@FDE_HOST@" .Values.platform.endpoints.decisionEngine.grpcHost | indent 12 }}
         apiDocuments:
           evaluation.proto: |
 {{ readFile "../../decision-engine-api-specifications/src/main/resources/META-INF/proto/forwardmeasure/decisionengine/v1/evaluation.proto" | indent 12 }}
